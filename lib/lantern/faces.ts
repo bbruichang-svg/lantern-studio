@@ -1,4 +1,5 @@
 import type { FaceId, FacePreset } from "./types"
+import { textureDrawScale } from "./geometry"
 
 export const FACE_PRESETS: readonly FacePreset[] = [
   { id: "laugh", name: "大笑" },
@@ -17,22 +18,29 @@ export const FACE_INK = "#2A2420"
 /**
  * Deterministic hand wobble — keeps strokes slightly imperfect
  * but identical on every redraw (no random flicker between frames).
+ * Amplitude is in world units (lantern diameter = 2).
  */
 function wob(n: number, amp: number): number {
   return Math.sin(n * 127.1 + 311.7) * amp
 }
 
+/**
+ * All drawing happens in WORLD units on the lantern surface
+ * (lantern diameter = 2): the caller sets up a canvas transform
+ * (textureDrawScale) so circles stay circular and stroke widths
+ * stay uniform once mapped onto the sphere.
+ */
 type FaceBrush = {
   ctx: CanvasRenderingContext2D
-  /** feature scale unit in px */
-  s: number
   ink: string
 }
 
-function strokeSetup(b: FaceBrush, widthScale = 0.17): void {
+const LINE_W = 0.07
+
+function strokeSetup(b: FaceBrush, w = LINE_W): void {
   b.ctx.strokeStyle = b.ink
   b.ctx.fillStyle = b.ink
-  b.ctx.lineWidth = b.s * widthScale
+  b.ctx.lineWidth = w
   b.ctx.lineCap = "round"
   b.ctx.lineJoin = "round"
 }
@@ -49,16 +57,16 @@ function handArc(
   seed: number,
 ): void {
   const { ctx } = b
-  const a = wob(seed, b.s * 0.012)
+  const a = wob(seed, 0.008)
   ctx.beginPath()
   ctx.moveTo(x0 + a, y0 - a * 0.5)
-  ctx.quadraticCurveTo(ctrlX + wob(seed + 1, b.s * 0.02), ctrlY, x1 - a, y1 + a * 0.5)
+  ctx.quadraticCurveTo(ctrlX + wob(seed + 1, 0.012), ctrlY, x1 - a, y1 + a * 0.5)
   ctx.stroke()
 }
 
 function shortDash(b: FaceBrush, x: number, y: number, dx: number, dy: number, seed: number): void {
   const { ctx } = b
-  const j = wob(seed, b.s * 0.03)
+  const j = wob(seed, 0.015)
   ctx.beginPath()
   ctx.moveTo(x + j, y - j)
   ctx.lineTo(x + dx + j * 0.5, y + dy)
@@ -66,264 +74,256 @@ function shortDash(b: FaceBrush, x: number, y: number, dx: number, dy: number, s
 }
 
 /* ------------------------------------------------------------------ */
-/* DTZ (大头仔)构件 — shared parts of every face                       */
+/* DTZ (大头仔)构件 — positions match the lantern reference photos:    */
+/* the whole face lives in a round patch on the front of the lantern, */
+/* hair curls along the top edge of that patch plus side C shapes.    */
 /* ------------------------------------------------------------------ */
 
-/** curly hair band wrapping the whole lantern above the face */
-function hairBand(b: FaceBrush, cy: number): void {
-  const { ctx, s } = b
-  const W = ctx.canvas.width
-  const step = s * 0.62
-  for (let x = step * 0.4, i = 0; x < W; x += step, i++) {
-    const seed = 100 + i * 7
-    const y = cy + wob(seed, s * 0.06)
-    if (i % 4 === 3) {
-      // occasional dash between curls, like the reference sheets
-      shortDash(b, x, y - s * 0.34, s * 0.04, s * 0.3, seed + 1)
-      continue
-    }
-    const dir = wob(seed + 2, 1) > 0 ? 1 : -1
+const FACE_PATCH_R = 0.52
+
+/** comma curls along the top arc of the face patch + side C shapes */
+function hairBand(b: FaceBrush): void {
+  const { ctx } = b
+  const angles = [-58, -30, 0, 30, 58]
+  angles.forEach((deg, i) => {
+    const a = (deg * Math.PI) / 180
+    const x = FACE_PATCH_R * 0.92 * Math.sin(a)
+    const y = -0.04 - FACE_PATCH_R * 0.92 * Math.cos(a)
+    const flip = i % 2 === 0 ? 1 : -1
+    ctx.save()
+    ctx.translate(x + wob(70 + i, 0.02), y + wob(80 + i, 0.015))
+    ctx.rotate(a * 0.55 * flip)
     ctx.beginPath()
-    ctx.moveTo(x + dir * s * 0.06, y + s * 0.2)
-    ctx.quadraticCurveTo(x - dir * s * 0.1, y - s * 0.16, x + dir * s * 0.16, y - s * 0.24)
-    ctx.quadraticCurveTo(x + dir * s * 0.36, y - s * 0.26, x + dir * s * 0.3, y - s * 0.04)
+    ctx.arc(0, 0, 0.062, flip > 0 ? -0.1 * Math.PI : 0.1 * Math.PI, flip > 0 ? 0.9 * Math.PI : 1.1 * Math.PI)
     ctx.stroke()
-  }
-  // side C shapes at head height, opening toward the face
-  const cx = W / 2
-  const eyeY = cy + s * 0.05
+    ctx.restore()
+  })
+  // side C shapes at cheek height, opening toward the face
   ctx.beginPath()
-  ctx.arc(cx - s * 1.5, eyeY, s * 0.3, Math.PI * 0.62, Math.PI * 1.38)
+  ctx.arc(-FACE_PATCH_R - 0.05, -0.02, 0.115, Math.PI * 0.6, Math.PI * 1.4)
   ctx.stroke()
   ctx.beginPath()
-  ctx.arc(cx + s * 1.5, eyeY, s * 0.3, -Math.PI * 0.38, Math.PI * 0.38)
+  ctx.arc(FACE_PATCH_R + 0.05, -0.02, 0.115, -Math.PI * 0.4, Math.PI * 0.4)
   ctx.stroke()
-  shortDash(b, cx - s * 1.72, eyeY - s * 0.52, -s * 0.08, -s * 0.16, 201)
-  shortDash(b, cx - s * 1.68, eyeY + s * 0.42, -s * 0.06, s * 0.18, 208)
-  shortDash(b, cx + s * 1.72, eyeY - s * 0.52, s * 0.08, -s * 0.16, 215)
-  shortDash(b, cx + s * 1.68, eyeY + s * 0.42, s * 0.06, s * 0.18, 222)
+  shortDash(b, -FACE_PATCH_R - 0.1, -0.36, -0.05, -0.1, 211)
+  shortDash(b, -FACE_PATCH_R - 0.08, 0.3, -0.04, 0.12, 218)
+  shortDash(b, FACE_PATCH_R + 0.1, -0.36, 0.05, -0.1, 225)
+  shortDash(b, FACE_PATCH_R + 0.08, 0.3, 0.04, 0.12, 232)
 }
 
 /** arched brow */
 function brow(b: FaceBrush, x: number, y: number, seed: number): void {
-  const w = b.s * 0.22
-  handArc(b, x - w, y + b.s * 0.03, x + w, y, x, y - b.s * 0.12, seed)
+  const w = 0.11
+  handArc(b, x - w, y + 0.02, x + w, y, x, y - 0.06, seed)
 }
 
 /** the signature "8" eye — two stacked filled lobes */
 function eye8(b: FaceBrush, x: number, y: number, seed: number): void {
-  const { ctx, s } = b
-  const r1 = s * 0.085
-  const r2 = s * 0.115
+  const { ctx } = b
   ctx.beginPath()
-  ctx.ellipse(x + wob(seed, r1 * 0.2), y, r1, r1 * 1.08, wob(seed + 2, 0.15), 0, Math.PI * 2)
+  ctx.ellipse(x + wob(seed, 0.008), y, 0.048, 0.055, wob(seed + 2, 0.15), 0, Math.PI * 2)
   ctx.fill()
   ctx.beginPath()
-  ctx.ellipse(x + wob(seed + 3, r2 * 0.16), y + s * 0.17, r2, r2 * 1.05, wob(seed + 5, 0.12), 0, Math.PI * 2)
+  ctx.ellipse(x + wob(seed + 3, 0.008), y + 0.1, 0.06, 0.068, wob(seed + 5, 0.12), 0, Math.PI * 2)
   ctx.fill()
 }
 
 /** happy closed eye — the wavy S the reference sheets use for squinting */
 function squintEye(b: FaceBrush, x: number, y: number, seed: number): void {
-  const w = b.s * 0.17
-  handArc(b, x - w, y, x, y + b.s * 0.03, x - w * 0.4, y - b.s * 0.1, seed)
-  handArc(b, x, y + b.s * 0.03, x + w, y, x + w * 0.4, y - b.s * 0.1, seed + 2)
+  const w = 0.075
+  handArc(b, x - w, y, x, y + 0.015, x - w * 0.4, y - 0.045, seed)
+  handArc(b, x, y + 0.015, x + w, y, x + w * 0.4, y - 0.045, seed + 2)
 }
 
 /** bashful closed eye — curve bowing down */
 function shyEye(b: FaceBrush, x: number, y: number, seed: number): void {
-  const w = b.s * 0.17
-  handArc(b, x - w, y, x + w, y, x, y + b.s * 0.1, seed)
+  const w = 0.075
+  handArc(b, x - w, y, x + w, y, x, y + 0.05, seed)
 }
 
 /** sleepy droopy flat eye */
 function sleepyEye(b: FaceBrush, x: number, y: number, seed: number): void {
-  const w = b.s * 0.17
-  handArc(b, x - w, y - b.s * 0.02, x + w, y + b.s * 0.01, x, y + b.s * 0.03, seed)
+  const w = 0.075
+  handArc(b, x - w, y - 0.01, x + w, y + 0.005, x, y + 0.015, seed)
 }
 
 /** the signature "3" nose — two arcs bulging right */
 function nose3(b: FaceBrush, x: number, y: number): void {
-  const { ctx, s } = b
+  const { ctx } = b
   ctx.beginPath()
-  ctx.arc(x, y + s * 0.14, s * 0.13, -Math.PI * 0.55, Math.PI * 0.5)
+  ctx.arc(x, y + 0.06, 0.058, -Math.PI * 0.55, Math.PI * 0.5)
   ctx.stroke()
   ctx.beginPath()
-  ctx.arc(x, y + s * 0.44, s * 0.15, -Math.PI * 0.5, Math.PI * 0.5)
+  ctx.arc(x, y + 0.21, 0.072, -Math.PI * 0.5, Math.PI * 0.5)
   ctx.stroke()
 }
 
 /** wide grin with curled-up ends (成都 / 伦敦 mouth) */
-function mouthGrin(b: FaceBrush, x: number, y: number, wScale: number, seed: number): void {
-  const { s } = b
-  const w = s * wScale
-  handArc(b, x - w, y, x + w, y + wob(seed, s * 0.012), x, y + s * 0.3, seed + 4)
-  handArc(b, x - w, y, x - w - s * 0.07, y - s * 0.1, x - w - s * 0.1, y + s * 0.02, seed + 6)
-  handArc(b, x + w, y + wob(seed, s * 0.012), x + w + s * 0.07, y - s * 0.1, x + w + s * 0.1, y + s * 0.02, seed + 8)
+function mouthGrin(b: FaceBrush, x: number, y: number, w: number, seed: number): void {
+  handArc(b, x - w, y, x + w, y + wob(seed, 0.008), x, y + 0.15, seed + 4)
+  handArc(b, x - w, y, x - w - 0.045, y - 0.05, x - w - 0.055, y + 0.01, seed + 6)
+  handArc(b, x + w, y + wob(seed, 0.008), x + w + 0.045, y - 0.05, x + w + 0.055, y + 0.01, seed + 8)
 }
 
 /** plain smile arc */
-function mouthSmile(b: FaceBrush, x: number, y: number, wScale: number, seed: number): void {
-  const w = b.s * wScale
-  handArc(b, x - w, y, x + w, y + wob(seed, b.s * 0.012), x, y + b.s * 0.16, seed + 4)
+function mouthSmile(b: FaceBrush, x: number, y: number, w: number, seed: number): void {
+  handArc(b, x - w, y, x + w, y + wob(seed, 0.008), x, y + 0.09, seed + 4)
 }
 
 /** unsure wavy mouth (悉尼 / 横滨) */
 function mouthWavy(b: FaceBrush, x: number, y: number): void {
-  const { s } = b
-  const w = s * 0.3
+  const w = 0.16
   const { ctx } = b
   ctx.beginPath()
   ctx.moveTo(x - w, y)
-  ctx.quadraticCurveTo(x - w * 0.5, y + s * 0.1, x, y)
-  ctx.quadraticCurveTo(x + w * 0.5, y - s * 0.1, x + w, y + s * 0.02)
+  ctx.quadraticCurveTo(x - w * 0.5, y + 0.05, x, y)
+  ctx.quadraticCurveTo(x + w * 0.5, y - 0.05, x + w, y + 0.01)
   ctx.stroke()
 }
 
 /** pout lips (澳门) — wide wave with a centre dip plus a lower dash */
 function mouthPout(b: FaceBrush, x: number, y: number, seed: number): void {
-  const { s, ctx } = b
-  const w = s * 0.32
+  const w = 0.17
+  const { ctx } = b
   ctx.beginPath()
   ctx.moveTo(x - w, y)
-  ctx.quadraticCurveTo(x - w * 0.5, y + s * 0.09, x, y + s * 0.02)
-  ctx.quadraticCurveTo(x + w * 0.5, y + s * 0.09, x + w, y)
+  ctx.quadraticCurveTo(x - w * 0.5, y + 0.045, x, y + 0.01)
+  ctx.quadraticCurveTo(x + w * 0.5, y + 0.045, x + w, y)
   ctx.stroke()
-  handArc(b, x - s * 0.1, y + s * 0.24, x + s * 0.1, y + s * 0.24, x, y + s * 0.3, seed + 4)
+  handArc(b, x - 0.05, y + 0.12, x + 0.05, y + 0.12, x, y + 0.16, seed + 4)
 }
 
 /** open laughing mouth with a tongue notch (北京) */
 function mouthOpen(b: FaceBrush, x: number, y: number, seed: number): void {
-  const { s, ctx } = b
-  const w = s * 0.26
-  const h = s * 0.24
+  const { ctx } = b
+  const w = 0.13
+  const h = 0.12
   ctx.beginPath()
-  ctx.moveTo(x - w + wob(seed, w * 0.08), y)
+  ctx.moveTo(x - w + wob(seed, 0.008), y)
   ctx.quadraticCurveTo(x - w * 0.6, y + h * 1.15, x, y + h)
-  ctx.quadraticCurveTo(x + w * 0.6, y + h * 1.15, x + w, y + wob(seed + 1, w * 0.08))
+  ctx.quadraticCurveTo(x + w * 0.6, y + h * 1.15, x + w, y + wob(seed + 1, 0.008))
   ctx.quadraticCurveTo(x, y - h * 0.22, x - w, y)
   ctx.fill()
 }
 
 /** small o mouth */
 function mouthO(b: FaceBrush, x: number, y: number, seed: number): void {
-  const { ctx, s } = b
+  const { ctx } = b
   ctx.beginPath()
-  ctx.ellipse(x, y, s * 0.09, s * 0.11, wob(seed, 0.2), 0, Math.PI * 2)
+  ctx.ellipse(x, y, 0.045, 0.055, wob(seed, 0.2), 0, Math.PI * 2)
   ctx.stroke()
 }
 
 /** small chin dash below the mouth */
 function chinDash(b: FaceBrush, x: number, y: number): void {
-  handArc(b, x - b.s * 0.09, y, x + b.s * 0.09, y, x, y + b.s * 0.05, 301)
+  handArc(b, x - 0.045, y, x + 0.045, y, x, y + 0.025, 301)
 }
 
 /** shy blush dashes on the cheeks */
 function blushStrokes(b: FaceBrush, x: number, y: number, seed: number): void {
-  const { ctx, s } = b
+  const { ctx } = b
   ctx.save()
-  ctx.lineWidth = s * 0.07
+  ctx.lineWidth = LINE_W * 0.75
   for (let i = 0; i < 3; i++) {
-    const dx = (i - 1) * s * 0.09
+    const dx = (i - 1) * 0.045
     ctx.beginPath()
-    ctx.moveTo(x + dx + wob(seed + i, s * 0.012), y - s * 0.05)
-    ctx.lineTo(x + dx + s * 0.05 + wob(seed + i + 3, s * 0.012), y + s * 0.05)
+    ctx.moveTo(x + dx + wob(seed + i, 0.006), y - 0.025)
+    ctx.lineTo(x + dx + 0.025 + wob(seed + i + 3, 0.006), y + 0.025)
     ctx.stroke()
   }
   ctx.restore()
 }
 
-const EYE_DX = 0.42
-const EYE_Y = -0.14
+const EYE_DX = 0.22
 
-type DrawFace = (b: FaceBrush, cx: number, cy: number) => void
+type DrawFace = (b: FaceBrush) => void
 
 const FACE_DRAWERS: Record<FaceId, DrawFace> = {
-  laugh(b, cx, cy) {
+  laugh(b) {
     strokeSetup(b)
-    hairBand(b, cy - b.s * 1.2)
-    brow(b, cx - b.s * EYE_DX, cy + b.s * -0.44, 41)
-    brow(b, cx + b.s * EYE_DX, cy + b.s * -0.44, 47)
-    eye8(b, cx - b.s * EYE_DX, cy + b.s * EYE_Y, 11)
-    eye8(b, cx + b.s * EYE_DX, cy + b.s * EYE_Y, 23)
-    nose3(b, cx + b.s * 0.04, cy + b.s * 0.1)
-    mouthGrin(b, cx, cy + b.s * 0.62, 0.42, 31)
-    chinDash(b, cx, cy + b.s * 1.06)
+    hairBand(b)
+    brow(b, -EYE_DX, -0.18, 41)
+    brow(b, EYE_DX, -0.18, 47)
+    eye8(b, -EYE_DX, 0, 11)
+    eye8(b, EYE_DX, 0, 23)
+    nose3(b, 0.02, 0.02)
+    mouthGrin(b, 0, 0.36, 0.2, 31)
+    chinDash(b, 0, 0.54)
   },
-  happy(b, cx, cy) {
+  happy(b) {
     strokeSetup(b)
-    hairBand(b, cy - b.s * 1.2)
-    brow(b, cx - b.s * EYE_DX, cy + b.s * -0.44, 41)
-    brow(b, cx + b.s * EYE_DX, cy + b.s * -0.44, 47)
-    eye8(b, cx - b.s * EYE_DX, cy + b.s * EYE_Y, 11)
-    eye8(b, cx + b.s * EYE_DX, cy + b.s * EYE_Y, 23)
-    nose3(b, cx + b.s * 0.04, cy + b.s * 0.1)
-    mouthOpen(b, cx, cy + b.s * 0.6, 31)
-    chinDash(b, cx, cy + b.s * 1.02)
+    hairBand(b)
+    brow(b, -EYE_DX, -0.18, 41)
+    brow(b, EYE_DX, -0.18, 47)
+    eye8(b, -EYE_DX, 0, 11)
+    eye8(b, EYE_DX, 0, 23)
+    nose3(b, 0.02, 0.02)
+    mouthOpen(b, 0, 0.35, 31)
+    chinDash(b, 0, 0.52)
   },
-  smile(b, cx, cy) {
+  smile(b) {
     strokeSetup(b)
-    hairBand(b, cy - b.s * 1.2)
-    eye8(b, cx - b.s * EYE_DX, cy + b.s * EYE_Y, 11)
-    eye8(b, cx + b.s * EYE_DX, cy + b.s * EYE_Y, 23)
-    nose3(b, cx + b.s * 0.04, cy + b.s * 0.1)
-    mouthSmile(b, cx, cy + b.s * 0.62, 0.22, 31)
-    chinDash(b, cx, cy + b.s * 1.0)
+    hairBand(b)
+    eye8(b, -EYE_DX, 0, 11)
+    eye8(b, EYE_DX, 0, 23)
+    nose3(b, 0.02, 0.02)
+    mouthSmile(b, 0, 0.36, 0.11, 31)
+    chinDash(b, 0, 0.52)
   },
-  squint(b, cx, cy) {
+  squint(b) {
     strokeSetup(b)
-    hairBand(b, cy - b.s * 1.2)
-    squintEye(b, cx - b.s * EYE_DX, cy + b.s * EYE_Y, 11)
-    squintEye(b, cx + b.s * EYE_DX, cy + b.s * EYE_Y, 23)
-    nose3(b, cx + b.s * 0.04, cy + b.s * 0.1)
-    mouthGrin(b, cx, cy + b.s * 0.62, 0.36, 31)
-    chinDash(b, cx, cy + b.s * 1.06)
+    hairBand(b)
+    squintEye(b, -EYE_DX, 0, 11)
+    squintEye(b, EYE_DX, 0, 23)
+    nose3(b, 0.02, 0.02)
+    mouthGrin(b, 0, 0.36, 0.17, 31)
+    chinDash(b, 0, 0.54)
   },
-  neutral(b, cx, cy) {
+  neutral(b) {
     strokeSetup(b)
-    hairBand(b, cy - b.s * 1.2)
-    brow(b, cx - b.s * EYE_DX, cy + b.s * -0.44, 41)
-    brow(b, cx + b.s * EYE_DX, cy + b.s * -0.44, 47)
-    eye8(b, cx - b.s * EYE_DX, cy + b.s * EYE_Y, 11)
-    eye8(b, cx + b.s * EYE_DX, cy + b.s * EYE_Y, 23)
-    nose3(b, cx + b.s * 0.04, cy + b.s * 0.1)
-    mouthWavy(b, cx, cy + b.s * 0.64)
-    chinDash(b, cx, cy + b.s * 1.02)
+    hairBand(b)
+    brow(b, -EYE_DX, -0.18, 41)
+    brow(b, EYE_DX, -0.18, 47)
+    eye8(b, -EYE_DX, 0, 11)
+    eye8(b, EYE_DX, 0, 23)
+    nose3(b, 0.02, 0.02)
+    mouthWavy(b, 0, 0.37)
+    chinDash(b, 0, 0.52)
   },
-  surprised(b, cx, cy) {
+  surprised(b) {
     strokeSetup(b)
-    hairBand(b, cy - b.s * 1.2)
-    brow(b, cx - b.s * EYE_DX, cy + b.s * -0.5, 41)
-    brow(b, cx + b.s * EYE_DX, cy + b.s * -0.5, 47)
-    eye8(b, cx - b.s * EYE_DX, cy + b.s * EYE_Y, 11)
-    eye8(b, cx + b.s * EYE_DX, cy + b.s * EYE_Y, 23)
-    nose3(b, cx + b.s * 0.04, cy + b.s * 0.1)
-    mouthPout(b, cx, cy + b.s * 0.62, 31)
+    hairBand(b)
+    brow(b, -EYE_DX, -0.22, 41)
+    brow(b, EYE_DX, -0.22, 47)
+    eye8(b, -EYE_DX, 0, 11)
+    eye8(b, EYE_DX, 0, 23)
+    nose3(b, 0.02, 0.02)
+    mouthPout(b, 0, 0.36, 31)
   },
-  shy(b, cx, cy) {
+  shy(b) {
     strokeSetup(b)
-    hairBand(b, cy - b.s * 1.2)
-    shyEye(b, cx - b.s * EYE_DX, cy + b.s * EYE_Y, 11)
-    shyEye(b, cx + b.s * EYE_DX, cy + b.s * EYE_Y, 23)
-    nose3(b, cx + b.s * 0.04, cy + b.s * 0.1)
-    mouthSmile(b, cx, cy + b.s * 0.62, 0.16, 31)
-    blushStrokes(b, cx - b.s * 0.82, cy + b.s * 0.12, 61)
-    blushStrokes(b, cx + b.s * 0.82, cy + b.s * 0.12, 71)
-    chinDash(b, cx, cy + b.s * 1.0)
+    hairBand(b)
+    shyEye(b, -EYE_DX, 0, 11)
+    shyEye(b, EYE_DX, 0, 23)
+    nose3(b, 0.02, 0.02)
+    mouthSmile(b, 0, 0.36, 0.08, 31)
+    blushStrokes(b, -0.42, 0.1, 61)
+    blushStrokes(b, 0.42, 0.1, 71)
+    chinDash(b, 0, 0.52)
   },
-  sleepy(b, cx, cy) {
+  sleepy(b) {
     strokeSetup(b)
-    hairBand(b, cy - b.s * 1.2)
-    sleepyEye(b, cx - b.s * EYE_DX, cy + b.s * EYE_Y, 11)
-    sleepyEye(b, cx + b.s * EYE_DX, cy + b.s * EYE_Y, 23)
-    nose3(b, cx + b.s * 0.04, cy + b.s * 0.1)
-    mouthO(b, cx, cy + b.s * 0.62, 31)
+    hairBand(b)
+    sleepyEye(b, -EYE_DX, 0, 11)
+    sleepyEye(b, EYE_DX, 0, 23)
+    nose3(b, 0.02, 0.02)
+    mouthO(b, 0, 0.36, 31)
   },
 }
 
 /**
- * FacePreset -> canvas. Kept as a single entry point so V2 can
- * compose eyes / mouth / details independently later.
+ * FacePreset -> canvas. Drawn in world units through the UV-correcting
+ * transform so the face appears round and undistorted on the sphere.
  * `ink` lets the stroke follow the lantern colour (DTZ rule:
  * stroke = darker — sometimes lighter — shade of the base).
  */
@@ -334,7 +334,10 @@ export function renderFaceToCanvas(canvas: HTMLCanvasElement, face: FacePreset |
   if (!face) return
   const drawer = FACE_DRAWERS[face.id]
   if (!drawer) return
-  const cx = canvas.width / 2
-  const cy = canvas.height * 0.47
-  drawer({ ctx, s: canvas.width * 0.2, ink }, cx, cy)
+  const { sx, sy } = textureDrawScale(canvas.width)
+  ctx.save()
+  ctx.translate(canvas.width / 2, canvas.height * 0.5)
+  ctx.scale(sx, sy)
+  drawer({ ctx, ink })
+  ctx.restore()
 }

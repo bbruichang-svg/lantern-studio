@@ -81,3 +81,23 @@ export function buildLanternGeometry(): THREE.BufferGeometry {
   applyHandmadeIrregularity(geometry)
   return geometry
 }
+
+/**
+ * Texture-canvas draw scales so that shapes drawn with these factors
+ * appear in true world proportions on the lantern surface.
+ *
+ * The lathe UV is anisotropic: horizontally 1024px wrap the full 360°
+ * (2π world units at the equator) while vertically the same 1024px only
+ * span the cut sphere's height — so 1 vertical px covers far less world
+ * distance than 1 horizontal px. Drawing must compensate or every face
+ * feature ends up squashed.
+ *
+ * Draw inside ctx.scale(sx, sy) using world units (lantern diameter = 2).
+ */
+export function textureDrawScale(canvasSize: number): { sx: number; sy: number } {
+  const sx = canvasSize / (2 * Math.PI * MAX_RADIUS)
+  // body v-span: the spherical body occupies PROFILE_POINTS of (PROFILE_POINTS + 4) intervals
+  const bodyPx = canvasSize * (PROFILE_POINTS / (PROFILE_POINTS + 4))
+  const sy = bodyPx / (BODY_STRETCH * (Math.PI - 2 * THETA0) * MAX_RADIUS)
+  return { sx, sy }
+}
