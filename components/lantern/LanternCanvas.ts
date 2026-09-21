@@ -99,7 +99,7 @@ export class LanternCanvas {
    * No-op until the image is cached — callers await ensureFace(src).
    */
   setFaceImage(src: string | null): void {
-    const sctx = this.facePlanarCanvas.getContext("2d")
+    const sctx = this.facePlanarCanvas.getContext("2d", { willReadFrequently: true })
     if (!sctx) return
     sctx.setTransform(1, 0, 0, 1, 0, 0)
     sctx.clearRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE)
@@ -291,8 +291,8 @@ export class LanternCanvas {
    */
   private remapFaceLayer(): void {
     const S = TEXTURE_SIZE
-    const fctx = this.faceCanvas.getContext("2d")
-    const sctx = this.facePlanarCanvas.getContext("2d")
+    const fctx = this.faceCanvas.getContext("2d", { willReadFrequently: true })
+    const sctx = this.facePlanarCanvas.getContext("2d", { willReadFrequently: true })
     if (!fctx || !sctx) return
 
     fctx.setTransform(1, 0, 0, 1, 0, 0)

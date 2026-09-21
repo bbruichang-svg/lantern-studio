@@ -31,7 +31,8 @@ export default function LanternPage() {
     setFace(getDefaultFace(id))
   }, [])
 
-  const handleFaceSelect = useCallback((next: FacePreset) => {
+  const handleFaceSelect = useCallback((next: FacePreset | null) => {
+    if (!next) return
     setFace(next)
     setColorId(next.colorId)
   }, [])

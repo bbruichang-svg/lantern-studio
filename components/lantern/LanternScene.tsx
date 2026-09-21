@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef } from "react"
+import { useMemo, useRef } from "react"
 import * as THREE from "three"
 import { Canvas, useFrame } from "@react-three/fiber"
 import { OrbitControls } from "@react-three/drei"
@@ -12,24 +12,34 @@ type LanternSceneProps = {
   face: FacePreset | null
   phase: LanternPhase
   onCoreClick: () => void
+  /** lighting preset: bright studio (full studio page), unlit night, lit night */
+  env?: "studio" | "nightDim" | "nightLit"
+  /** faint ambient moon (MVP hero scene only) */
+  moon?: boolean
+}
+
+type EnvPreset = { amb: number; key: number; fill: number; night: number }
+
+const ENV_PRESETS: Record<"studio" | "nightDim" | "nightLit", EnvPreset> = {
+  // editing light — paper reads true to its colour
+  studio: { amb: 1.0, key: 0.85, fill: 0.25, night: 0 },
+  // unlit lantern under moonlight — visible but clearly not glowing
+  nightDim: { amb: 0.4, key: 0.1, fill: 0.05, night: 0.28 },
+  // lit — environment drops away, the paper light owns the scene
+  nightLit: { amb: 0.16, key: 0.06, fill: 0.04, night: 0.55 },
 }
 
 /**
- * Studio lighting while editing (paper reads true to its colour); once the
- * lantern is lit the environment drops to a dark night so the paper light
- * clearly comes from INSIDE the lantern, with a faint cool blue fill from
- * behind to keep the night readable.
+ * Crossfading environment lights. The lantern is never re-lit by the
+ * environment once lit; the night preset keeps a cool blue fill so the
+ * warm paper reads against it.
  */
-function EnvironmentLights({ phase }: { phase: LanternPhase }) {
+function EnvironmentLights({ env }: { env: "studio" | "nightDim" | "nightLit" }) {
   const ambient = useRef<THREE.AmbientLight>(null)
   const key = useRef<THREE.DirectionalLight>(null)
   const fill = useRef<THREE.DirectionalLight>(null)
   const night = useRef<THREE.DirectionalLight>(null)
-
-  const studio = phase === "studio" || phase === "ready"
-  const target = studio
-    ? { amb: 1.0, key: 0.85, fill: 0.25, night: 0 }
-    : { amb: 0.16, key: 0.06, fill: 0.04, night: 0.55 }
+  const target = ENV_PRESETS[env]
 
   useFrame((_, delta) => {
     const k = 1 - Math.exp(-2.2 * Math.min(delta, 0.05))
@@ -51,7 +61,58 @@ function EnvironmentLights({ phase }: { phase: LanternPhase }) {
   )
 }
 
-export default function LanternScene({ color, face, phase, onCoreClick }: LanternSceneProps) {
+function makeMoonTexture(): THREE.CanvasTexture {
+  const c = document.createElement("canvas")
+  c.width = 256
+  c.height = 256
+  const ctx = c.getContext("2d")
+  if (ctx) {
+    const g = ctx.createRadialGradient(128, 128, 30, 128, 128, 128)
+    g.addColorStop(0, "rgba(238,235,220,0.95)")
+    g.addColorStop(0.45, "rgba(238,235,220,0.55)")
+    g.addColorStop(0.75, "rgba(238,235,220,0.12)")
+    g.addColorStop(1, "rgba(238,235,220,0)")
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, 256, 256)
+  }
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
+/** ambient moon — atmosphere only, never the hero (≤5% visual weight) */
+function MoonDisc({ lit }: { lit: boolean }) {
+  const texture = useMemo(() => makeMoonTexture(), [])
+  const group = useRef<THREE.Group>(null)
+  const material = useRef<THREE.SpriteMaterial>(null)
+
+  useFrame((_, delta) => {
+    const k = 1 - Math.exp(-1.6 * Math.min(delta, 0.05))
+    if (material.current) {
+      const o = lit ? 0.38 : 0.2
+      material.current.opacity += (o - material.current.opacity) * k
+    }
+    if (group.current) {
+      // drifts slightly higher & closer once the lantern is lit
+      const y = lit ? 2.62 : 2.3
+      group.current.position.y += (y - group.current.position.y) * k
+    }
+  })
+
+  return (
+    <group ref={group} position={[-3.5, 2.3, -5.5]}>
+      <sprite scale={[1.5, 1.5, 1]}>
+        <spriteMaterial map={texture} transparent opacity={0.2} depthWrite={false} />
+      </sprite>
+    </group>
+  )
+}
+
+export default function LanternScene({ color, face, phase, onCoreClick, env, moon }: LanternSceneProps) {
+  const resolvedEnv: "studio" | "nightDim" | "nightLit" =
+    env ?? (phase === "studio" || phase === "ready" ? "studio" : "nightLit")
+  const lit = phase === "lighting" || phase === "finished"
+
   return (
     <Canvas
       className="!absolute inset-0"
@@ -59,7 +120,8 @@ export default function LanternScene({ color, face, phase, onCoreClick }: Lanter
       camera={{ fov: 35, position: [0, 0.55, 5.4], near: 0.1, far: 60 }}
       gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
     >
-      <EnvironmentLights phase={phase} />
+      <EnvironmentLights env={resolvedEnv} />
+      {moon && <MoonDisc lit={lit} />}
 
       <LanternModel color={color} face={face} phase={phase} onCoreClick={onCoreClick} />
 

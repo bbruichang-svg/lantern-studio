@@ -19,3 +19,9 @@ export type FacePreset = {
 export type StudioMode = "color" | "face"
 
 export type LanternPhase = "studio" | "ready" | "lighting" | "finished"
+
+/**
+ * MVP state machine (root page). Kept separate from LanternPhase so the
+ * full studio at /lantern stays untouched.
+ */
+export type MvpStage = "landing" | "make" | "lighting" | "finished"
