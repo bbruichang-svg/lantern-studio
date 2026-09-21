@@ -36,7 +36,7 @@ export default function StudioToolbar({
           />
         </div>
         <div className={mode === "face" ? "block" : "hidden"}>
-          <FacePicker selected={selectedFace} onSelect={onFaceSelect} />
+          <FacePicker selectedId={selectedFace?.id ?? null} onSelect={onFaceSelect} />
         </div>
       </div>
 

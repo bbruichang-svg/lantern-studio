@@ -1,4 +1,4 @@
-import type { LanternColor } from "./types"
+import type { FacePreset, LanternColor } from "./types"
 
 /**
  * DTZ palette — extracted from the 28 big-head (大头仔) city designs.
@@ -75,4 +75,29 @@ export const DEFAULT_COLOR_ID = "xuan"
 
 export function getColorById(id: string): LanternColor {
   return LANTERN_COLORS.find((c) => c.id === id) ?? LANTERN_COLORS[0]
+}
+
+/* ------------------------------------------------------------------ */
+/* Faces — the real DTZ artwork, preprocessed into stroke-only discs   */
+/* (one PNG per design under /public/faces). Every city colour owns    */
+/* its matching face; 苏州 ships two expressions (black & white ink).  */
+/* ------------------------------------------------------------------ */
+
+export const FACE_SRC_PREFIX = "/faces"
+
+export function faceSrc(id: string): string {
+  return `${FACE_SRC_PREFIX}/${id}.png`
+}
+
+export const ALL_FACES: readonly FacePreset[] = [
+  ...SEEDS.map((s) => ({ id: s.id, name: s.name, src: faceSrc(s.id), colorId: s.id })),
+  { id: "suzhou2", name: "苏州·惊讶", src: faceSrc("suzhou2"), colorId: "suzhou" },
+]
+
+export function getDefaultFace(colorId: string): FacePreset {
+  return ALL_FACES.find((f) => f.id === colorId) ?? ALL_FACES[0]
+}
+
+export function getFaceById(id: string): FacePreset | null {
+  return ALL_FACES.find((f) => f.id === id) ?? null
 }

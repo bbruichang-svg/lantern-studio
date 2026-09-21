@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from "react"
 import * as THREE from "three"
 import { useFrame } from "@react-three/fiber"
 import { BODY_TOP_Y, RING_CAP_HEIGHT, RING_RADIUS, buildLanternGeometry } from "@/lib/lantern/geometry"
+import { ensureFace } from "@/lib/lantern/faces"
 import { LanternCanvas } from "./LanternCanvas"
 import { computeIdleSway, computeLightingFrame } from "./LanternLighting"
 import type { FacePreset, LanternColor, LanternPhase } from "@/lib/lantern/types"
@@ -60,12 +61,23 @@ export default function LanternModel({ color, face, phase, onCoreClick }: Lanter
   const targetGlow = useMemo(() => new THREE.Color(color.glow), [color.glow])
 
   useEffect(() => {
-    lanternTexture.setFace(face, color.line)
+    const src = face?.src ?? null
+    if (!src) {
+      lanternTexture.setFaceImage(null)
+      return
+    }
+    let cancelled = false
+    void ensureFace(src).then(() => {
+      if (!cancelled) lanternTexture.setFaceImage(src)
+    })
     // DEBUG: expose texture layers for inspection (remove before V2)
     if (typeof window !== "undefined") {
       ;(window as unknown as Record<string, unknown>).__lanternDebug = lanternTexture
     }
-  }, [face, color.line, lanternTexture])
+    return () => {
+      cancelled = true
+    }
+  }, [face, lanternTexture])
 
   useEffect(() => {
     return () => {

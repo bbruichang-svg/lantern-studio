@@ -2,24 +2,18 @@ export type LanternColor = {
   id: string
   name: string
   base: string
-  /** stroke colour of the drawn face — a darker (or lighter) shade of base, per the DTZ design system */
+  /** stroke colour of the DTZ design (kept for reference / glow tweaks) */
   line: string
   glow: string
 }
 
-export type FaceId =
-  | "happy"
-  | "smile"
-  | "squint"
-  | "surprised"
-  | "shy"
-  | "sleepy"
-  | "laugh"
-  | "neutral"
-
 export type FacePreset = {
-  id: FaceId
+  id: string
   name: string
+  /** /faces/<slug>.png — preprocessed DTZ artwork (strokes on transparent disc) */
+  src: string
+  /** the city colour this face belongs to */
+  colorId: string
 }
 
 export type StudioMode = "color" | "face"

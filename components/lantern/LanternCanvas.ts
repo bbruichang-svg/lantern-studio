@@ -1,7 +1,6 @@
 import * as THREE from "three"
-import { renderFaceToCanvas, FACE_INK } from "@/lib/lantern/faces"
+import { getCachedFace } from "@/lib/lantern/faces"
 import { worldYForV } from "@/lib/lantern/geometry"
-import type { FacePreset } from "@/lib/lantern/types"
 
 export const TEXTURE_SIZE = 1024
 /** horizontal bamboo-style ribs baked into the paper texture (like the reference photo) */
@@ -68,11 +67,21 @@ export class LanternCanvas {
     this.texture.anisotropy = 4
   }
 
-  setFace(face: FacePreset | null, ink: string = FACE_INK): void {
-    // 1. paint the DTZ artwork onto a flat disc (its native space)
-    renderFaceToCanvas(this.facePlanarCanvas, face, ink)
-    // 2. remap disc -> lantern UV through the inverse orthographic
-    //    projection + the lathe's non-linear vertical UV
+  /**
+   * Paint the preprocessed DTZ disc (strokes on transparent, disc
+   * inscribed in the canvas) onto the planar face layer, then remap it
+   * onto the lantern UV through the inverse orthographic projection.
+   * No-op until the image is cached — callers await ensureFace(src).
+   */
+  setFaceImage(src: string | null): void {
+    const sctx = this.facePlanarCanvas.getContext("2d")
+    if (!sctx) return
+    sctx.setTransform(1, 0, 0, 1, 0, 0)
+    sctx.clearRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE)
+    if (src) {
+      const img = getCachedFace(src)
+      if (img) sctx.drawImage(img, 0, 0, TEXTURE_SIZE, TEXTURE_SIZE)
+    }
     this.remapFaceLayer()
     this.composite()
   }

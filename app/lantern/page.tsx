@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react"
 import dynamic from "next/dynamic"
 import StudioToolbar from "@/components/lantern/StudioToolbar"
-import { DEFAULT_COLOR_ID, getColorById } from "@/lib/lantern/colors"
+import { DEFAULT_COLOR_ID, getColorById, getDefaultFace } from "@/lib/lantern/colors"
+import { preloadAllFaces } from "@/lib/lantern/faces"
 import type { FacePreset, LanternPhase, StudioMode } from "@/lib/lantern/types"
 
 const LanternScene = dynamic(() => import("@/components/lantern/LanternScene"), {
@@ -13,12 +14,28 @@ const LanternScene = dynamic(() => import("@/components/lantern/LanternScene"), 
 
 export default function LanternPage() {
   const [colorId, setColorId] = useState<string>(DEFAULT_COLOR_ID)
-  const [face, setFace] = useState<FacePreset | null>(null)
+  // a city colour carries its own DTZ face; picking a face switches
+  // the lantern to that design's colour (city = colour + expression)
+  const [face, setFace] = useState<FacePreset | null>(() => getDefaultFace(DEFAULT_COLOR_ID))
   const [mode, setMode] = useState<StudioMode | null>("color")
   const [phase, setPhase] = useState<LanternPhase>("studio")
 
   const color = getColorById(colorId)
   const inStudio = phase === "studio"
+
+  const handleColorSelect = useCallback((id: string) => {
+    setColorId(id)
+    setFace(getDefaultFace(id))
+  }, [])
+
+  const handleFaceSelect = useCallback((next: FacePreset) => {
+    setFace(next)
+    setColorId(next.colorId)
+  }, [])
+
+  useEffect(() => {
+    preloadAllFaces()
+  }, [])
 
   const handleCoreClick = useCallback(() => {
     setPhase((prev) => (prev === "ready" ? "lighting" : prev))
@@ -90,9 +107,9 @@ export default function LanternPage() {
           mode={mode}
           onModeChange={setMode}
           selectedColorId={colorId}
-          onColorSelect={setColorId}
+          onColorSelect={handleColorSelect}
           selectedFace={face}
-          onFaceSelect={setFace}
+          onFaceSelect={handleFaceSelect}
         />
       )}
     </main>

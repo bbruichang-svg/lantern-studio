@@ -1,29 +1,18 @@
 "use client"
 
-import { useEffect, useRef } from "react"
-import { FACE_PRESETS, renderFaceToCanvas } from "@/lib/lantern/faces"
+import { ALL_FACES, getColorById } from "@/lib/lantern/colors"
 import type { FacePreset } from "@/lib/lantern/types"
 
 type FacePickerProps = {
-  selected: FacePreset | null
-  onSelect: (face: FacePreset | null) => void
+  selectedId: string | null
+  onSelect: (face: FacePreset) => void
 }
 
-function FaceThumb({ face }: { face: FacePreset }) {
-  const ref = useRef<HTMLCanvasElement>(null)
-
-  useEffect(() => {
-    if (ref.current) renderFaceToCanvas(ref.current, face)
-  }, [face])
-
-  return <canvas ref={ref} width={96} height={96} className="h-12 w-12" aria-hidden="true" />
-}
-
-export default function FacePicker({ selected, onSelect }: FacePickerProps) {
+export default function FacePicker({ selectedId, onSelect }: FacePickerProps) {
   return (
-    <div className="grid grid-cols-4 gap-x-3 gap-y-3">
-      {FACE_PRESETS.map((face) => {
-        const isSelected = selected?.id === face.id
+    <div className="grid max-w-[420px] grid-cols-7 gap-x-2 gap-y-2.5">
+      {ALL_FACES.map((face) => {
+        const isSelected = face.id === selectedId
         return (
           <button
             key={face.id}
@@ -31,17 +20,22 @@ export default function FacePicker({ selected, onSelect }: FacePickerProps) {
             onClick={() => onSelect(face)}
             aria-label={face.name}
             title={face.name}
-            className={`flex flex-col items-center gap-1 rounded-xl p-1.5 transition-all duration-200 hover:bg-black/5 ${
+            className={`flex items-center justify-center rounded-xl p-1 transition-all duration-200 hover:bg-black/5 ${
               isSelected ? "bg-black/5 outline outline-1 outline-[#2A2622]" : "outline outline-1 outline-transparent"
             }`}
           >
-            <FaceThumb face={face} />
+            {/* disc backing in the city colour so light-ink designs stay visible */}
             <span
-              className={`text-[10px] tracking-wide transition-colors duration-200 ${
-                isSelected ? "text-[#2A2622]" : "text-[#2A2622]/55"
-              }`}
+              className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-black/10"
+              style={{ backgroundColor: getColorById(face.colorId).base }}
             >
-              {face.name}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={face.src}
+                alt=""
+                draggable={false}
+                className="h-11 w-11 select-none"
+              />
             </span>
           </button>
         )
