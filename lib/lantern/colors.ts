@@ -2,7 +2,7 @@ import type { LanternColor } from "./types"
 
 /**
  * DTZ palette — extracted from the 28 big-head (大头仔) city designs.
- * Standard rule: face stroke = base darkened; a few designs invert to
+ * Standard rule: near-black ink strokes; a few designs invert to
  * light strokes on dark/grey bases (kept explicit below).
  */
 function mixHex(hex: string, target: string, ratio: number): string {
@@ -16,8 +16,14 @@ function mixHex(hex: string, target: string, ratio: number): string {
   return `#${out.map((v) => v.toString(16).padStart(2, "0")).join("")}`
 }
 
-const darken = (hex: string, ratio = 0.64) => mixHex(hex, "#1A0E08", ratio)
 const lighten = (hex: string, ratio = 0.42) => mixHex(hex, "#FFFFFF", ratio)
+
+/**
+ * DTZ source artwork draws every standard design with near-black ink —
+ * the stroke is NOT a darkened shade of the base. Only the inverted
+ * designs (dark bases / white faces) specify their own line colour.
+ */
+const DEFAULT_LINE = "#221A14"
 
 type ColorSeed = {
   id: string
@@ -61,7 +67,7 @@ export const LANTERN_COLORS: readonly LanternColor[] = SEEDS.map((s) => ({
   id: s.id,
   name: s.name,
   base: s.base,
-  line: s.line ?? darken(s.base),
+  line: s.line ?? DEFAULT_LINE,
   glow: lighten(s.base),
 }))
 
