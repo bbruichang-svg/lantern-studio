@@ -6,6 +6,15 @@ export const TEXTURE_SIZE = 1024
 /** horizontal bamboo-style ribs baked into the paper texture (like the reference photo) */
 export const RIB_COUNT = 20
 
+/** deterministic RNG so the paper looks identical on every reload */
+function makeRng(seed: number): () => number {
+  let s = seed >>> 0
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0
+    return s / 4294967296
+  }
+}
+
 /**
  * The DTZ artwork is an ORTHOGRAPHIC front view of a sphere: a disc of
  * radius R whose planar point (px, py) sits on the sphere at azimuth
@@ -38,9 +47,15 @@ function makeCanvas(size: number): HTMLCanvasElement {
  */
 export class LanternCanvas {
   readonly texture: THREE.CanvasTexture
+  /** grayscale roughness map (linear colour space) for the paper material */
+  readonly roughnessTexture: THREE.CanvasTexture
+  /** very-low-strength fibre bump map */
+  readonly bumpTexture: THREE.CanvasTexture
 
   private compositeCanvas: HTMLCanvasElement
   private paperCanvas: HTMLCanvasElement
+  private roughnessCanvas: HTMLCanvasElement
+  private bumpCanvas: HTMLCanvasElement
   private facePlanarCanvas: HTMLCanvasElement
   private faceCanvas: HTMLCanvasElement
   private drawingCanvas: HTMLCanvasElement
@@ -50,6 +65,8 @@ export class LanternCanvas {
   constructor() {
     this.compositeCanvas = makeCanvas(TEXTURE_SIZE)
     this.paperCanvas = makeCanvas(TEXTURE_SIZE)
+    this.roughnessCanvas = makeCanvas(TEXTURE_SIZE)
+    this.bumpCanvas = makeCanvas(TEXTURE_SIZE)
     this.facePlanarCanvas = makeCanvas(TEXTURE_SIZE)
     this.faceCanvas = makeCanvas(TEXTURE_SIZE)
     this.drawingCanvas = makeCanvas(TEXTURE_SIZE)
@@ -60,11 +77,19 @@ export class LanternCanvas {
     this.ctx = ctx
 
     this.drawPaperLayer()
+    this.drawRoughnessLayer()
+    this.drawBumpLayer()
     this.composite()
 
     this.texture = new THREE.CanvasTexture(this.compositeCanvas)
     this.texture.colorSpace = THREE.SRGBColorSpace
     this.texture.anisotropy = 4
+
+    // roughness/bump maps stay linear — no sRGB conversion
+    this.roughnessTexture = new THREE.CanvasTexture(this.roughnessCanvas)
+    this.roughnessTexture.anisotropy = 4
+    this.bumpTexture = new THREE.CanvasTexture(this.bumpCanvas)
+    this.bumpTexture.anisotropy = 4
   }
 
   /**
@@ -97,43 +122,75 @@ export class LanternCanvas {
   }
 
   /**
-   * Neutral paper: light warm grey base so the material tint shows the
-   * true lantern colour, plus horizontal grain and faint vertical ribs.
+   * Neutral handmade paper:
+   *  - flat light base (the city colour lives on the material tint)
+   *  - large, very-low-contrast mottling (low-frequency colour unevenness)
+   *  - short, thin, slightly curved fibres — never full-width lines
+   *  - faint wavy bamboo ribs (structure, kept far below visibility threshold)
    */
   private drawPaperLayer(): void {
     const ctx = this.paperCanvas.getContext("2d")
     if (!ctx) return
     const S = TEXTURE_SIZE
+    const rng = makeRng(20260921)
 
     ctx.fillStyle = "#EAE5DA"
     ctx.fillRect(0, 0, S, S)
 
-    // horizontal paper grain — faint bands of light & shadow, never black lines
-    for (let i = 0; i < 240; i++) {
-      const y = (i / 240) * S + Math.sin(i * 91.7) * 6
-      const light = Math.sin(i * 33.7) > 0
-      ctx.fillStyle = light ? "rgba(255,255,255,0.05)" : "rgba(60,50,40,0.045)"
-      ctx.fillRect(0, y, S, 1 + (Math.sin(i * 57.3) * 0.5 + 0.5) * 2.2)
-    }
-    // fibre specks
-    for (let i = 0; i < 500; i++) {
-      const x = Math.abs(Math.sin(i * 12.9898) * 43758.5453) % S
-      const y = Math.abs(Math.sin(i * 78.233) * 12345.6789) % S
-      ctx.fillStyle = Math.sin(i * 3.3) > 0 ? "rgba(255,255,255,0.05)" : "rgba(60,50,40,0.05)"
-      ctx.fillRect(x, y, 2, 1)
+    // low-frequency mottling — big soft blotches, barely-there contrast,
+    // alternating warm/cool so the paper never reads as flat plastic
+    for (let i = 0; i < 26; i++) {
+      const x = rng() * S
+      const y = rng() * S
+      const r = 130 + rng() * 200
+      const warm = rng() > 0.45
+      const a = 0.02 + rng() * 0.026
+      const g = ctx.createRadialGradient(x, y, r * 0.12, x, y, r)
+      g.addColorStop(0, warm ? `rgba(198,178,150,${a})` : `rgba(230,234,236,${a})`)
+      g.addColorStop(1, "rgba(0,0,0,0)")
+      ctx.fillStyle = g
+      ctx.fillRect(x - r, y - r, r * 2, r * 2)
     }
 
-    // horizontal ribs — latitude bands wrapping around the body, soft not black
+    // paper fibres — short strokes with a gentle bend, mostly (not fully)
+    // horizontal so there's a grain direction without visible stripes
+    for (let i = 0; i < 850; i++) {
+      const x = rng() * S
+      const y = rng() * S
+      const len = 5 + rng() * 20
+      const horiz = rng() < 0.7
+      const ang = horiz ? (rng() - 0.5) * 0.9 : rng() * Math.PI
+      const dx = Math.cos(ang) * len
+      const dy = Math.sin(ang) * len
+      const light = rng() > 0.5
+      const a = 0.02 + rng() * 0.03
+      ctx.strokeStyle = light ? `rgba(255,252,244,${a})` : `rgba(122,104,84,${a})`
+      ctx.lineWidth = 0.5 + rng() * 0.9
+      ctx.beginPath()
+      ctx.moveTo(x, y)
+      ctx.quadraticCurveTo(x + dx * 0.5 + (rng() - 0.5) * 4, y + dy * 0.5 + (rng() - 0.5) * 4, x + dx, y + dy)
+      ctx.stroke()
+    }
+
+    // bamboo ribs — structural latitude bands, much fainter than before and
+    // gently wavy so they never read as straight machine lines
     for (let k = 0; k < RIB_COUNT; k++) {
       const cy = ((k + 0.5) / RIB_COUNT) * S
-      const g = ctx.createLinearGradient(0, cy - 16, 0, cy + 16)
+      const g = ctx.createLinearGradient(0, cy - 14, 0, cy + 14)
       g.addColorStop(0, "rgba(60,50,40,0)")
-      g.addColorStop(0.5, "rgba(60,50,40,0.07)")
+      g.addColorStop(0.5, "rgba(60,50,40,0.05)")
       g.addColorStop(1, "rgba(60,50,40,0)")
       ctx.fillStyle = g
-      ctx.fillRect(0, cy - 16, S, 32)
-      ctx.fillStyle = "rgba(60,50,40,0.05)"
-      ctx.fillRect(0, cy - 1, S, 2)
+      ctx.fillRect(0, cy - 14, S, 28)
+      ctx.strokeStyle = "rgba(60,50,40,0.04)"
+      ctx.lineWidth = 1.3
+      ctx.beginPath()
+      for (let x = 0; x <= S; x += 16) {
+        const yy = cy + Math.sin(x * 0.011 + k * 3.1) * 2.6
+        if (x === 0) ctx.moveTo(x, yy)
+        else ctx.lineTo(x, yy)
+      }
+      ctx.stroke()
     }
 
     // slightly darker toward top & bottom rims
@@ -144,6 +201,80 @@ export class LanternCanvas {
     shade.addColorStop(1, "rgba(40,32,26,0.2)")
     ctx.fillStyle = shade
     ctx.fillRect(0, 0, S, S)
+  }
+
+  /**
+   * Roughness map — mid-value ~0.87 with ±0.05 low-frequency drift and a
+   * faint fibre-scale jitter, so specular response is uneven like real paper.
+   * (roughnessMap reads the green channel; keep it grayscale.)
+   */
+  private drawRoughnessLayer(): void {
+    const ctx = this.roughnessCanvas.getContext("2d")
+    if (!ctx) return
+    const S = TEXTURE_SIZE
+    const rng = makeRng(90210)
+
+    ctx.fillStyle = "rgb(222,222,222)" // ≈0.87
+    ctx.fillRect(0, 0, S, S)
+
+    for (let i = 0; i < 22; i++) {
+      const x = rng() * S
+      const y = rng() * S
+      const r = 140 + rng() * 220
+      const brighter = rng() > 0.5
+      const a = 0.025 + rng() * 0.03
+      const g = ctx.createRadialGradient(x, y, r * 0.1, x, y, r)
+      g.addColorStop(0, brighter ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${a})`)
+      g.addColorStop(1, "rgba(0,0,0,0)")
+      ctx.fillStyle = g
+      ctx.fillRect(x - r, y - r, r * 2, r * 2)
+    }
+
+    // fibre-scale roughness jitter
+    for (let i = 0; i < 320; i++) {
+      const x = rng() * S
+      const y = rng() * S
+      const len = 4 + rng() * 16
+      const ang = (rng() - 0.5) * 1.1
+      const brighter = rng() > 0.5
+      ctx.strokeStyle = brighter ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)"
+      ctx.lineWidth = 0.6 + rng() * 0.9
+      ctx.beginPath()
+      ctx.moveTo(x, y)
+      ctx.lineTo(x + Math.cos(ang) * len, y + Math.sin(ang) * len)
+      ctx.stroke()
+    }
+  }
+
+  /**
+   * Bump map — fibres and specks on a flat mid-grey field. Kept on its own
+   * canvas so the bump never touches the face artwork. Applied with a very
+   * small bumpScale on the material.
+   */
+  private drawBumpLayer(): void {
+    const ctx = this.bumpCanvas.getContext("2d")
+    if (!ctx) return
+    const S = TEXTURE_SIZE
+    const rng = makeRng(40401)
+
+    ctx.fillStyle = "#808080"
+    ctx.fillRect(0, 0, S, S)
+
+    for (let i = 0; i < 550; i++) {
+      const x = rng() * S
+      const y = rng() * S
+      const len = 4 + rng() * 18
+      const horiz = rng() < 0.7
+      const ang = horiz ? (rng() - 0.5) * 0.8 : rng() * Math.PI
+      const up = rng() > 0.5
+      const a = 0.05 + rng() * 0.06
+      ctx.strokeStyle = up ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${a})`
+      ctx.lineWidth = 0.5 + rng() * 0.8
+      ctx.beginPath()
+      ctx.moveTo(x, y)
+      ctx.quadraticCurveTo(x + Math.cos(ang) * len * 0.5, y + Math.sin(ang) * len * 0.5, x + Math.cos(ang) * len, y + Math.sin(ang) * len)
+      ctx.stroke()
+    }
   }
 
   /**

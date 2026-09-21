@@ -22,6 +22,9 @@ export default function LanternPage() {
 
   const color = getColorById(colorId)
   const inStudio = phase === "studio"
+  // once the wick is lit the world turns to night — the studio only exists
+  // while editing; the lit lantern belongs to a dark blue evening
+  const night = phase === "lighting" || phase === "finished"
 
   const handleColorSelect = useCallback((id: string) => {
     setColorId(id)
@@ -58,15 +61,33 @@ export default function LanternPage() {
             "radial-gradient(ellipse 65% 55% at 50% 46%, #FFFFFF 0%, #F3F0E7 70%, #EBE7DB 100%)",
         }}
       />
+      {/* night backdrop crossfades in as the lantern lights */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 transition-opacity duration-[1800ms] ease-out"
+        style={{
+          background:
+            "radial-gradient(ellipse 70% 60% at 50% 46%, #17233A 0%, #0C1526 55%, #060B16 100%)",
+          opacity: night ? 1 : 0,
+        }}
+      />
 
       <LanternScene color={color} face={face} phase={phase} onCoreClick={handleCoreClick} />
 
       {/* title */}
       <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center pt-6 sm:pt-8">
-        <h1 className="text-[11px] font-medium tracking-[0.42em] text-[#2A2622]/75 sm:text-xs">
+        <h1
+          className={`text-[11px] font-medium tracking-[0.42em] transition-colors duration-[1800ms] sm:text-xs ${
+            night ? "text-[#E8E4DA]/80" : "text-[#2A2622]/75"
+          }`}
+        >
           LANTERN STUDIO
         </h1>
-        <p className="mt-1.5 text-[11px] tracking-[0.2em] text-[#2A2622]/45">
+        <p
+          className={`mt-1.5 text-[11px] tracking-[0.2em] transition-colors duration-[1800ms] ${
+            night ? "text-[#E8E4DA]/50" : "text-[#2A2622]/45"
+          }`}
+        >
           画一盏灯，点亮它
         </p>
       </header>
@@ -97,7 +118,7 @@ export default function LanternPage() {
       {/* finished caption */}
       {phase === "finished" && (
         <div className="pointer-events-none absolute inset-x-0 bottom-14 z-10 flex justify-center">
-          <p className="text-xs tracking-[0.4em] text-[#2A2622]/50">这盏灯是你的</p>
+          <p className="text-xs tracking-[0.4em] text-[#E8E4DA]/55">这盏灯是你的</p>
         </div>
       )}
 
