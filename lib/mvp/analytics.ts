@@ -7,6 +7,7 @@ export type MvpEvent =
   | "page_view"
   | "start_clicked"
   | "color_selected"
+  | "face_selected"
   | "light_clicked"
   | "light_completed"
   | "song_clicked"

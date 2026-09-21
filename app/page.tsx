@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react"
 import dynamic from "next/dynamic"
-import { MVP_COLORS, getMvpColor, getMvpFace } from "@/lib/mvp/colors"
+import StudioToolbar from "@/components/lantern/StudioToolbar"
+import { getColorById, getDefaultFace } from "@/lib/lantern/colors"
+import { preloadAllFaces } from "@/lib/lantern/faces"
 import { pickSong, songLink, type MvpSong } from "@/lib/mvp/songs"
 import { track } from "@/lib/mvp/analytics"
-import type { LanternPhase, MvpStage } from "@/lib/lantern/types"
+import type { FacePreset, LanternPhase, MvpStage, StudioMode } from "@/lib/lantern/types"
 
 const LanternScene = dynamic(() => import("@/components/lantern/LanternScene"), {
   ssr: false,
@@ -42,7 +44,11 @@ const LIGHTING_MS = 3600
 
 export default function MvpPage() {
   const [stage, setStage] = useState<MvpStage>("landing")
-  const [colorId, setColorId] = useState<string>(MVP_COLORS[0].id)
+  const [colorId, setColorId] = useState<string>("chengdu")
+  // a city colour carries its own DTZ face — picking a colour brings its
+  // artwork, picking a face switches the lantern to that design's colour
+  const [face, setFace] = useState<FacePreset | null>(() => getDefaultFace("chengdu"))
+  const [mode, setMode] = useState<StudioMode | null>(null)
   const [song, setSong] = useState<MvpSong | null>(null)
   const [copied, setCopied] = useState(false)
 
@@ -51,8 +57,12 @@ export default function MvpPage() {
   }, [])
   // (dev StrictMode mounts effects twice; production fires once)
 
-  const color = getMvpColor(colorId)
-  const face = getMvpFace(colorId)
+  // warm the face-thumbnail cache so the FACE grid opens instantly
+  useEffect(() => {
+    preloadAllFaces()
+  }, [])
+
+  const color = getColorById(colorId)
 
   // MVP stage → legacy lantern phase: landing/make are unlit ("ready"),
   // lighting/finished drive the 2.8s internal-light timeline unchanged
@@ -62,17 +72,29 @@ export default function MvpPage() {
 
   const handleStart = useCallback(() => {
     track("start_clicked")
+    setMode("color")
     setStage("make")
   }, [])
 
-  const handleColorSelect = useCallback((id: string, key: string) => {
-    track("color_selected", { color: key })
+  const handleColorSelect = useCallback((id: string) => {
+    track("color_selected", { color: id })
     setColorId(id)
+    setFace(getDefaultFace(id))
   }, [])
 
+  const handleFaceSelect = useCallback(
+    (next: FacePreset | null) => {
+      if (!next) return
+      track("face_selected", { face: next.id })
+      setFace(next)
+      setColorId(next.colorId)
+    },
+    [],
+  )
+
   const lightUp = useCallback(() => {
-    const key = MVP_COLORS.find((c) => c.id === colorId)?.key ?? colorId
-    track("light_clicked", { color: key })
+    track("light_clicked", { color: colorId })
+    setMode(null)
     setSong(pickSong())
     setStage("lighting")
   }, [colorId])
@@ -86,8 +108,7 @@ export default function MvpPage() {
     if (stage !== "lighting") return
     const timer = window.setTimeout(() => {
       setStage("finished")
-      const key = MVP_COLORS.find((c) => c.id === colorId)?.key ?? colorId
-      track("light_completed", { color: key })
+      track("light_completed", { color: colorId })
     }, LIGHTING_MS)
     return () => window.clearTimeout(timer)
   }, [stage, colorId])
@@ -178,37 +199,28 @@ export default function MvpPage() {
       {/* ---------------- MAKE (fades away on lighting) ---------------- */}
       {(stage === "make" || stage === "lighting") && (
         <div
-          className={`absolute inset-x-0 bottom-0 z-10 flex flex-col items-center gap-5 pb-9 transition-opacity duration-700 ${
+          className={`transition-opacity duration-700 ${
             stage === "lighting" ? "pointer-events-none opacity-0" : "opacity-100"
           }`}
         >
-          <span className="text-[10px] tracking-[0.45em] text-[#E8E4DA]/50">COLOR</span>
-          <div className="flex items-center gap-5">
-            {MVP_COLORS.map((c) => {
-              const selected = c.id === colorId
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  aria-label={c.label}
-                  onClick={() => handleColorSelect(c.id, c.key)}
-                  className={`h-11 w-11 rounded-full transition-all duration-200 ${
-                    selected
-                      ? "scale-110 outline outline-2 outline-[#E8E4DA]/85 outline-offset-3"
-                      : "outline outline-1 outline-white/15 hover:scale-105"
-                  }`}
-                  style={{ backgroundColor: c.swatch }}
-                />
-              )
-            })}
-          </div>
-          <button
-            type="button"
-            onClick={lightUp}
-            className="mt-1 rounded-full bg-[#E8E4DA] px-12 py-3.5 text-sm tracking-[0.5em] text-[#0B1220] transition-all duration-300 hover:bg-white"
-          >
-            点亮
-          </button>
+          <StudioToolbar
+            tone="night"
+            mode={mode}
+            onModeChange={setMode}
+            selectedColorId={colorId}
+            onColorSelect={handleColorSelect}
+            selectedFace={face}
+            onFaceSelect={handleFaceSelect}
+            action={
+              <button
+                type="button"
+                onClick={lightUp}
+                className="rounded-full bg-[#E8E4DA] px-12 py-3.5 text-sm tracking-[0.5em] text-[#0B1220] transition-all duration-300 hover:bg-white"
+              >
+                点亮
+              </button>
+            }
+          />
         </div>
       )}
 
