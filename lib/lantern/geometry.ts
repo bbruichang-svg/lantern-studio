@@ -83,21 +83,22 @@ export function buildLanternGeometry(): THREE.BufferGeometry {
 }
 
 /**
- * Texture-canvas draw scales so that shapes drawn with these factors
- * appear in true world proportions on the lantern surface.
+ * Inverse of the lathe UV mapping (vertical axis).
  *
- * The lathe UV is anisotropic: horizontally 1024px wrap the full 360°
- * (2π world units at the equator) while vertically the same 1024px only
- * span the cut sphere's height — so 1 vertical px covers far less world
- * distance than 1 horizontal px. Drawing must compensate or every face
- * feature ends up squashed.
+ * LatheGeometry distributes texture v linearly along the profile POINT
+ * indices, and our profile spaces those points uniformly in the polar
+ * angle φ — so world height y = -cos(φ)·BODY_STRETCH is strongly
+ * NON-linear in v (1px near the equator covers ~4.3× the world height
+ * of 1px near the rims). Anything painted straight onto the texture in
+ * linear pixel space comes out distorted; use this to remap.
  *
- * Draw inside ctx.scale(sx, sy) using world units (lantern diameter = 2).
+ * Returns the world-space y for a texture v, or null on the ring lips
+ * (v outside the spherical body) where no face art should appear.
  */
-export function textureDrawScale(canvasSize: number): { sx: number; sy: number } {
-  const sx = canvasSize / (2 * Math.PI * MAX_RADIUS)
-  // body v-span: the spherical body occupies PROFILE_POINTS of (PROFILE_POINTS + 4) intervals
-  const bodyPx = canvasSize * (PROFILE_POINTS / (PROFILE_POINTS + 4))
-  const sy = bodyPx / (BODY_STRETCH * (Math.PI - 2 * THETA0) * MAX_RADIUS)
-  return { sx, sy }
+export function worldYForV(v: number): number | null {
+  const lip = 2 / (PROFILE_POINTS + 4)
+  if (v < lip || v > 1 - lip) return null
+  const t = (v - lip) / (1 - 2 * lip)
+  const phi = THETA0 + t * (Math.PI - 2 * THETA0)
+  return -Math.cos(phi) * BODY_STRETCH
 }

@@ -1,5 +1,4 @@
 import type { FaceId, FacePreset } from "./types"
-import { textureDrawScale } from "./geometry"
 
 export const FACE_PRESETS: readonly FacePreset[] = [
   { id: "laugh", name: "大笑" },
@@ -28,21 +27,20 @@ function wob(n: number, amp: number): number {
 }
 
 /**
- * All drawing happens in WORLD units on the lantern surface through
- * the caller's UV-correcting transform (textureDrawScale), so circles
- * stay circular and stroke widths stay uniform on the sphere.
+ * All drawing happens in FACE-RADIUS units (the DTZ artwork's own
+ * coordinate system, y+ = down) through a uniform scale — circles are
+ * circles, exactly like the source PNGs. Mapping onto the lantern's
+ * curved surface is NOT done here; LanternCanvas remaps this planar
+ * artwork with the inverse orthographic projection (asin) plus the
+ * lathe's non-linear vertical UV correction.
  */
 type FaceBrush = {
   ctx: CanvasRenderingContext2D
   ink: string
 }
 
-/**
- * Face patch radius in world units. The DTZ face fills the whole
- * artwork circle, and the构件 ring reaches 0.65–0.99 of that radius
- * (measured from the source PNGs), so the patch is large on the body.
- */
-const F = 0.85
+/** drawing unit: 1 = face radius (the DTZ disc radius) */
+const F = 1
 
 /** DTZ stroke ≈ 4.5% of the face radius (measured from source PNGs) */
 const LINE_W = 0.045 * F
@@ -80,7 +78,10 @@ function hairCurls(b: FaceBrush): void {
     const y = c.y * F + wob(80 + i, 0.012)
     ctx.save()
     ctx.translate(x, y)
-    ctx.rotate(c.dir * (0.35 + wob(90 + i, 0.2)))
+    // rotation follows the head arc so the band reads as one hairline,
+    // with alternating lean + slight jitter for the hand-drawn feel
+    const a = Math.atan2(c.x, -c.y)
+    ctx.rotate(a * 0.9 + c.dir * 0.4 + wob(90 + i, 0.12))
     ctx.beginPath()
     const r = c.r * F
     const a0 = c.dir > 0 ? -0.15 * Math.PI : 0.65 * Math.PI
@@ -169,15 +170,15 @@ function brow(b: FaceBrush, s: 1 | -1): void {
 }
 
 /** the DTZ nose — ONE comma-hook stroke (measured from the source):
- *  horizontal top bowing slightly up → right end turns down → tail
- *  hooks back down-left with a blunt tip; tucks under the right eye */
+ *  horizontal stroke skimming under the right eye's lower lobe →
+ *  right end turns down → tail hooks back left with a blunt tip */
 function nose(b: FaceBrush): void {
   const { ctx } = b
   ctx.beginPath()
-  ctx.moveTo(-0.07 * F + wob(301, 0.01), 0.03 * F)
-  ctx.bezierCurveTo(0.05 * F, -0.05 * F, 0.17 * F, -0.05 * F, 0.25 * F, 0.04 * F)
-  ctx.quadraticCurveTo(0.31 * F, 0.11 * F, 0.26 * F, 0.2 * F)
-  ctx.quadraticCurveTo(0.22 * F, 0.28 * F, 0.12 * F, 0.3 * F)
+  ctx.moveTo(-0.1 * F + wob(301, 0.01), 0.15 * F)
+  ctx.bezierCurveTo(0.02 * F, 0.08 * F, 0.14 * F, 0.08 * F, 0.22 * F, 0.15 * F)
+  ctx.quadraticCurveTo(0.3 * F, 0.2 * F, 0.27 * F, 0.27 * F)
+  ctx.quadraticCurveTo(0.24 * F, 0.33 * F, 0.13 * F, 0.31 * F)
   ctx.stroke()
 }
 
@@ -191,11 +192,11 @@ function mouthGrin(b: FaceBrush): void {
   ctx.stroke()
   ctx.beginPath()
   ctx.moveTo(-0.3 * F, 0.32 * F)
-  ctx.quadraticCurveTo(-0.375 * F, 0.315 * F, -0.34 * F, 0.245 * F)
+  ctx.quadraticCurveTo(-0.395 * F, 0.3 * F, -0.35 * F, 0.225 * F)
   ctx.stroke()
   ctx.beginPath()
   ctx.moveTo(0.3 * F, 0.32 * F)
-  ctx.quadraticCurveTo(0.375 * F, 0.315 * F, 0.34 * F, 0.245 * F)
+  ctx.quadraticCurveTo(0.395 * F, 0.3 * F, 0.35 * F, 0.225 * F)
   ctx.stroke()
 }
 
@@ -373,22 +374,23 @@ const FACE_DRAWERS: Record<FaceId, DrawFace> = {
 }
 
 /**
- * FacePreset -> canvas. Drawn in world units through the UV-correcting
- * transform so the face appears round and undistorted on the sphere.
- * `ink` follows the DTZ rule: near-black on standard colours, the
- * inverted designs pass their own light line colour.
+ * FacePreset -> planar canvas. Paints the DTZ disc exactly like the
+ * source artwork (face radius = canvas radius / 2, y+ down). This is
+ * the flat source for the lantern's inverse-orthographic remap, and
+ * also what the picker thumbnails show.
  */
 export function renderFaceToCanvas(canvas: HTMLCanvasElement, face: FacePreset | null, ink: string = FACE_INK): void {
   const ctx = canvas.getContext("2d")
   if (!ctx) return
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   if (!face) return
   const drawer = FACE_DRAWERS[face.id]
   if (!drawer) return
-  const { sx, sy } = textureDrawScale(canvas.width)
+  const R = Math.min(canvas.width, canvas.height) / 2
   ctx.save()
-  ctx.translate(canvas.width / 2, canvas.height * 0.5)
-  ctx.scale(sx, sy)
+  ctx.translate(canvas.width / 2, canvas.height / 2)
+  ctx.scale(R, R)
   drawer({ ctx, ink })
   ctx.restore()
 }

@@ -1,10 +1,21 @@
 import * as THREE from "three"
-import { renderFaceToCanvas } from "@/lib/lantern/faces"
+import { renderFaceToCanvas, FACE_INK } from "@/lib/lantern/faces"
+import { worldYForV } from "@/lib/lantern/geometry"
 import type { FacePreset } from "@/lib/lantern/types"
 
 export const TEXTURE_SIZE = 1024
 /** horizontal bamboo-style ribs baked into the paper texture (like the reference photo) */
 export const RIB_COUNT = 20
+
+/**
+ * The DTZ artwork is an ORTHOGRAPHIC front view of a sphere: a disc of
+ * radius R whose planar point (px, py) sits on the sphere at azimuth
+ * asin(px / R). Wrapping the disc LINEARLY around the lantern (px →
+ * arc length) squashes the face horizontally and smears the side
+ * elements — so instead we paint the face onto a flat disc, then remap
+ * every lantern-texel back through the inverse projection.
+ */
+const FACE_PATCH_WORLD_R = 0.85
 
 function makeCanvas(size: number): HTMLCanvasElement {
   const c = document.createElement("canvas")
@@ -31,6 +42,7 @@ export class LanternCanvas {
 
   private compositeCanvas: HTMLCanvasElement
   private paperCanvas: HTMLCanvasElement
+  private facePlanarCanvas: HTMLCanvasElement
   private faceCanvas: HTMLCanvasElement
   private drawingCanvas: HTMLCanvasElement
   private textCanvas: HTMLCanvasElement
@@ -39,6 +51,7 @@ export class LanternCanvas {
   constructor() {
     this.compositeCanvas = makeCanvas(TEXTURE_SIZE)
     this.paperCanvas = makeCanvas(TEXTURE_SIZE)
+    this.facePlanarCanvas = makeCanvas(TEXTURE_SIZE)
     this.faceCanvas = makeCanvas(TEXTURE_SIZE)
     this.drawingCanvas = makeCanvas(TEXTURE_SIZE)
     this.textCanvas = makeCanvas(TEXTURE_SIZE)
@@ -55,8 +68,12 @@ export class LanternCanvas {
     this.texture.anisotropy = 4
   }
 
-  setFace(face: FacePreset | null, ink: string): void {
-    renderFaceToCanvas(this.faceCanvas, face, ink)
+  setFace(face: FacePreset | null, ink: string = FACE_INK): void {
+    // 1. paint the DTZ artwork onto a flat disc (its native space)
+    renderFaceToCanvas(this.facePlanarCanvas, face, ink)
+    // 2. remap disc -> lantern UV through the inverse orthographic
+    //    projection + the lathe's non-linear vertical UV
+    this.remapFaceLayer()
     this.composite()
   }
 
@@ -118,6 +135,64 @@ export class LanternCanvas {
     shade.addColorStop(1, "rgba(40,32,26,0.2)")
     ctx.fillStyle = shade
     ctx.fillRect(0, 0, S, S)
+  }
+
+  /**
+   * Disc -> lantern UV remap.
+   *
+   * For every face-layer texel (x, y):
+   *   u = (x+0.5)/S            → azimuth θ = (u−½)·2π  (face centred at u=0.5)
+   *   v = 1−(y+0.5)/S          → world height via worldYForV (non-linear lathe UV)
+   *   planar px = sin(θ)/F     (inverse orthographic: disc x = sin θ · R)
+   *   planar py = −worldY/F    (orthographic preserves the vertical axis;
+   *                             minus flips world-up to image-down)
+   * then samples the flat DTZ disc at (px, py). Texels outside the disc
+   * or on the ring lips stay transparent.
+   */
+  private remapFaceLayer(): void {
+    const S = TEXTURE_SIZE
+    const fctx = this.faceCanvas.getContext("2d")
+    const sctx = this.facePlanarCanvas.getContext("2d")
+    if (!fctx || !sctx) return
+
+    fctx.setTransform(1, 0, 0, 1, 0, 0)
+    fctx.clearRect(0, 0, S, S)
+    const src = sctx.getImageData(0, 0, S, S)
+    const out = fctx.getImageData(0, 0, S, S)
+    const sd = src.data
+    const dst = out.data
+
+    // per-column planar x; per-row world height
+    const pxCol = new Float32Array(S)
+    for (let x = 0; x < S; x++) {
+      const theta = ((x + 0.5) / S - 0.5) * Math.PI * 2
+      pxCol[x] = Math.sin(theta) / FACE_PATCH_WORLD_R
+    }
+    const pyRow = new Float32Array(S)
+    for (let y = 0; y < S; y++) {
+      const wy = worldYForV(1 - (y + 0.5) / S)
+      pyRow[y] = wy === null ? 2 : -wy / FACE_PATCH_WORLD_R
+    }
+
+    for (let y = 0; y < S; y++) {
+      const py = pyRow[y]
+      if (py < -1 || py > 1) continue
+      const syi = Math.min(S - 1, Math.max(0, Math.floor((0.5 + py * 0.5) * S)))
+      const srcRow = syi * S * 4
+      const rowBase = y * S * 4
+      for (let x = 0; x < S; x++) {
+        const px = pxCol[x]
+        if (px < -1 || px > 1) continue
+        const sxi = Math.min(S - 1, Math.max(0, Math.floor((0.5 + px * 0.5) * S)))
+        const si = srcRow + sxi * 4
+        const di = rowBase + x * 4
+        dst[di] = sd[si]
+        dst[di + 1] = sd[si + 1]
+        dst[di + 2] = sd[si + 2]
+        dst[di + 3] = sd[si + 3]
+      }
+    }
+    fctx.putImageData(out, 0, 0)
   }
 
   private composite(): void {

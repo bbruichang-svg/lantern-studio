@@ -61,6 +61,10 @@ export default function LanternModel({ color, face, phase, onCoreClick }: Lanter
 
   useEffect(() => {
     lanternTexture.setFace(face, color.line)
+    // DEBUG: expose texture layers for inspection (remove before V2)
+    if (typeof window !== "undefined") {
+      ;(window as unknown as Record<string, unknown>).__lanternDebug = lanternTexture
+    }
   }, [face, color.line, lanternTexture])
 
   useEffect(() => {
