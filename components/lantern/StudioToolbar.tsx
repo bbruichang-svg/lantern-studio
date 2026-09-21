@@ -5,8 +5,8 @@ import FacePicker from "./FacePicker"
 import type { FacePreset, StudioMode } from "@/lib/lantern/types"
 
 type StudioToolbarProps = {
-  mode: StudioMode
-  onModeChange: (mode: StudioMode) => void
+  mode: StudioMode | null
+  onModeChange: (mode: StudioMode | null) => void
   selectedColorId: string
   onColorSelect: (colorId: string) => void
   selectedFace: FacePreset | null

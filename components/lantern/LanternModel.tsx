@@ -5,7 +5,7 @@ import * as THREE from "three"
 import { useFrame } from "@react-three/fiber"
 import { LANTERN_HEIGHT, RING_RADIUS, buildLanternGeometry } from "@/lib/lantern/geometry"
 import { LanternCanvas } from "./LanternCanvas"
-import { computeIdleSway, computeLightingFrame, LIGHTING_DURATION } from "./LanternLighting"
+import { computeIdleSway, computeLightingFrame } from "./LanternLighting"
 import type { FacePreset, LanternColor, LanternPhase } from "@/lib/lantern/types"
 
 type LanternModelProps = {

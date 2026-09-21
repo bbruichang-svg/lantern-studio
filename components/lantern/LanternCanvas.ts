@@ -1,6 +1,6 @@
 import * as THREE from "three"
-import { renderFaceToCanvas } from "./faces"
-import type { FacePreset } from "./types"
+import { renderFaceToCanvas } from "@/lib/lantern/faces"
+import type { FacePreset } from "@/lib/lantern/types"
 
 export const TEXTURE_SIZE = 1024
 /** vertical ribs baked into the paper texture */
