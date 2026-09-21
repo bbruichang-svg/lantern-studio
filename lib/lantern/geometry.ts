@@ -1,14 +1,22 @@
 import * as THREE from "three"
 
-/** Height : Diameter = 1.15 : 1 */
-export const LANTERN_HEIGHT = 2.3
 /** max body radius (diameter 2.0) */
 export const MAX_RADIUS = 1.0
-/** top & bottom ring radius — 0.64–0.70 */
-export const RING_RADIUS = 0.66
+/** small top/bottom opening radius — matches the reference photo (~22%) */
+export const RING_RADIUS = 0.23
+/** slight vertical stretch: the reference lantern is a touch taller than wide */
+export const BODY_STRETCH = 1.06
+/** height of the small straight ring lip at top & bottom */
+export const RING_CAP_HEIGHT = 0.05
 
 export const LATHE_SEGMENTS = 72
-export const PROFILE_POINTS = 40
+export const PROFILE_POINTS = 48
+
+const THETA0 = Math.asin(RING_RADIUS)
+/** y where the spherical body meets the ring opening */
+export const BODY_TOP_Y = Math.cos(THETA0) * BODY_STRETCH
+/** overall height including the ring lips */
+export const LANTERN_HEIGHT = 2 * (BODY_TOP_Y + RING_CAP_HEIGHT)
 
 /** deterministic pseudo noise in [-1, 1] */
 function pseudoNoise(a: number, b: number): number {
@@ -17,25 +25,32 @@ function pseudoNoise(a: number, b: number): number {
 }
 
 /**
- * Lantern silhouette: bottom ring -> bulged body -> top ring.
+ * Lantern silhouette — a true sphere, slightly stretched vertically,
+ * cut at a small ring opening top & bottom, with short straight lips.
  * Built bottom-to-top so texture v=0 is the bottom.
  */
 export function buildLanternProfile(): THREE.Vector2[] {
   const pts: THREE.Vector2[] = []
+  // bottom lip (slight inward taper)
+  pts.push(new THREE.Vector2(RING_RADIUS * 0.86, -(BODY_TOP_Y + RING_CAP_HEIGHT)))
+  pts.push(new THREE.Vector2(RING_RADIUS, -BODY_TOP_Y))
+  // spherical body: φ from θ0 (bottom) to π-θ0 (top)
   for (let i = 0; i <= PROFILE_POINTS; i++) {
     const t = i / PROFILE_POINTS
-    const y = -LANTERN_HEIGHT / 2 + t * LANTERN_HEIGHT
-    const bulge = Math.pow(Math.sin(Math.PI * t), 0.9)
-    const r = RING_RADIUS + (MAX_RADIUS - RING_RADIUS) * bulge
-    pts.push(new THREE.Vector2(Math.max(r, 0.02), y))
+    const phi = THETA0 + t * (Math.PI - 2 * THETA0)
+    const r = Math.sin(phi)
+    const y = -Math.cos(phi) * BODY_STRETCH
+    pts.push(new THREE.Vector2(r, y))
   }
+  // top lip
+  pts.push(new THREE.Vector2(RING_RADIUS, BODY_TOP_Y))
+  pts.push(new THREE.Vector2(RING_RADIUS * 0.86, BODY_TOP_Y + RING_CAP_HEIGHT))
   return pts
 }
 
 /**
  * ~80% geometric / ~20% handmade: gentle vertex perturbation,
  * fading to zero at the top & bottom rings so the structure stays clean.
- * 0.5%–2% amplitude — reads as "handmade", not "broken".
  */
 export function applyHandmadeIrregularity(geometry: THREE.BufferGeometry): void {
   const pos = geometry.attributes.position as THREE.BufferAttribute
@@ -51,10 +66,7 @@ export function applyHandmadeIrregularity(geometry: THREE.BufferGeometry): void 
 
     // random handmade wobble, keyed on (y, angle) so the UV seam stays welded
     const n = pseudoNoise(v.y * 4.2, angle * 1.9)
-    // very gentle rib ripples — 14 of them, matching the texture ribs
-    const rib = Math.sin(angle * 14) * 0.0045
-
-    const radial = 1 + (n * 0.011 + rib) * bodyWeight
+    const radial = 1 + n * 0.011 * bodyWeight
     const nr = r * radial
     pos.setX(i, Math.cos(angle) * nr)
     pos.setZ(i, Math.sin(angle) * nr)

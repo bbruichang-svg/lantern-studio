@@ -3,8 +3,8 @@ import { renderFaceToCanvas } from "@/lib/lantern/faces"
 import type { FacePreset } from "@/lib/lantern/types"
 
 export const TEXTURE_SIZE = 1024
-/** vertical ribs baked into the paper texture */
-export const RIB_COUNT = 14
+/** horizontal bamboo-style ribs baked into the paper texture (like the reference photo) */
+export const RIB_COUNT = 20
 
 function makeCanvas(size: number): HTMLCanvasElement {
   const c = document.createElement("canvas")
@@ -55,8 +55,8 @@ export class LanternCanvas {
     this.texture.anisotropy = 4
   }
 
-  setFace(face: FacePreset | null): void {
-    renderFaceToCanvas(this.faceCanvas, face)
+  setFace(face: FacePreset | null, ink: string): void {
+    renderFaceToCanvas(this.faceCanvas, face, ink)
     this.composite()
   }
 
@@ -97,17 +97,17 @@ export class LanternCanvas {
       ctx.fillRect(x, y, 2, 1)
     }
 
-    // vertical ribs — soft structural shading, not bamboo strips
+    // horizontal ribs — latitude bands wrapping around the body, soft not black
     for (let k = 0; k < RIB_COUNT; k++) {
-      const cx = ((k + 0.5) / RIB_COUNT) * S
-      const g = ctx.createLinearGradient(cx - 30, 0, cx + 30, 0)
+      const cy = ((k + 0.5) / RIB_COUNT) * S
+      const g = ctx.createLinearGradient(0, cy - 16, 0, cy + 16)
       g.addColorStop(0, "rgba(60,50,40,0)")
       g.addColorStop(0.5, "rgba(60,50,40,0.07)")
       g.addColorStop(1, "rgba(60,50,40,0)")
       ctx.fillStyle = g
-      ctx.fillRect(cx - 30, 0, 60, S)
+      ctx.fillRect(0, cy - 16, S, 32)
       ctx.fillStyle = "rgba(60,50,40,0.05)"
-      ctx.fillRect(cx - 1, 0, 2, S)
+      ctx.fillRect(0, cy - 1, S, 2)
     }
 
     // slightly darker toward top & bottom rims

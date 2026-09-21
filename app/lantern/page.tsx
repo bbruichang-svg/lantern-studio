@@ -31,14 +31,14 @@ export default function LanternPage() {
   }, [phase])
 
   return (
-    <main className="relative h-dvh w-full overflow-hidden bg-[#07080B]">
-      {/* night background: barely-there radial glow behind the lantern */}
+    <main className="relative h-dvh w-full overflow-hidden bg-[#F7F4ED]">
+      {/* bright studio background: white center, warm paper edges */}
       <div
         aria-hidden="true"
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(ellipse 55% 45% at 50% 46%, rgba(120,116,104,0.10), rgba(7,8,11,0) 70%), #07080B",
+            "radial-gradient(ellipse 65% 55% at 50% 46%, #FFFFFF 0%, #F3F0E7 70%, #EBE7DB 100%)",
         }}
       />
 
@@ -46,10 +46,10 @@ export default function LanternPage() {
 
       {/* title */}
       <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center pt-6 sm:pt-8">
-        <h1 className="text-[11px] font-medium tracking-[0.42em] text-[#E9E3D8]/70 sm:text-xs">
+        <h1 className="text-[11px] font-medium tracking-[0.42em] text-[#2A2622]/75 sm:text-xs">
           LANTERN STUDIO
         </h1>
-        <p className="mt-1.5 text-[11px] tracking-[0.2em] text-[#E9E3D8]/35">
+        <p className="mt-1.5 text-[11px] tracking-[0.2em] text-[#2A2622]/45">
           画一盏灯，点亮它
         </p>
       </header>
@@ -62,7 +62,7 @@ export default function LanternPage() {
             setMode(null)
             setPhase("ready")
           }}
-          className="absolute right-5 top-6 z-10 rounded-full px-5 py-2.5 text-xs tracking-[0.25em] text-[#E9E3D8]/75 outline outline-1 outline-[#E9E3D8]/25 transition-all duration-200 hover:bg-white/8 hover:text-[#E9E3D8] sm:right-8 sm:top-8"
+          className="absolute right-5 top-6 z-10 rounded-full px-5 py-2.5 text-xs tracking-[0.25em] text-[#2A2622]/75 outline outline-1 outline-[#2A2622]/25 transition-all duration-200 hover:bg-black/5 hover:text-[#2A2622] sm:right-8 sm:top-8"
         >
           DONE
         </button>
@@ -71,7 +71,7 @@ export default function LanternPage() {
       {/* ready-to-light hint */}
       {phase === "ready" && (
         <div className="pointer-events-none absolute inset-x-0 bottom-16 z-10 flex justify-center">
-          <p className="animate-pulse-soft text-xs tracking-[0.3em] text-[#E9E3D8]/50">
+          <p className="animate-pulse-soft text-xs tracking-[0.3em] text-[#2A2622]/55">
             点击灯芯 · 点亮它
           </p>
         </div>
@@ -80,7 +80,7 @@ export default function LanternPage() {
       {/* finished caption */}
       {phase === "finished" && (
         <div className="pointer-events-none absolute inset-x-0 bottom-14 z-10 flex justify-center">
-          <p className="text-xs tracking-[0.4em] text-[#E9E3D8]/45">这盏灯是你的</p>
+          <p className="text-xs tracking-[0.4em] text-[#2A2622]/50">这盏灯是你的</p>
         </div>
       )}
 

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef } from "react"
 import * as THREE from "three"
 import { useFrame } from "@react-three/fiber"
-import { LANTERN_HEIGHT, RING_RADIUS, buildLanternGeometry } from "@/lib/lantern/geometry"
+import { BODY_TOP_Y, RING_CAP_HEIGHT, RING_RADIUS, buildLanternGeometry } from "@/lib/lantern/geometry"
 import { LanternCanvas } from "./LanternCanvas"
 import { computeIdleSway, computeLightingFrame } from "./LanternLighting"
 import type { FacePreset, LanternColor, LanternPhase } from "@/lib/lantern/types"
@@ -60,8 +60,8 @@ export default function LanternModel({ color, face, phase, onCoreClick }: Lanter
   const targetGlow = useMemo(() => new THREE.Color(color.glow), [color.glow])
 
   useEffect(() => {
-    lanternTexture.setFace(face)
-  }, [face, lanternTexture])
+    lanternTexture.setFace(face, color.line)
+  }, [face, color.line, lanternTexture])
 
   useEffect(() => {
     return () => {
@@ -106,11 +106,11 @@ export default function LanternModel({ color, face, phase, onCoreClick }: Lanter
     }
     if (glowMaterial.current) {
       glowMaterial.current.color.lerp(targetGlow, k)
-      glowMaterial.current.opacity = frame ? frame.glow * 0.22 : 0
+      glowMaterial.current.opacity = frame ? frame.glow * 0.4 : 0
     }
     if (bloomMaterial.current) {
       bloomMaterial.current.color.lerp(targetGlow, k)
-      bloomMaterial.current.opacity = frame ? frame.glow * 0.55 : 0
+      bloomMaterial.current.opacity = frame ? frame.glow * 0.5 : 0
     }
     if (coreBulb.current) {
       coreBulb.current.color.lerp(targetGlow, k)
@@ -137,7 +137,7 @@ export default function LanternModel({ color, face, phase, onCoreClick }: Lanter
           opacity={0}
           depthTest={false}
           depthWrite={false}
-          blending={THREE.AdditiveBlending}
+          blending={THREE.NormalBlending}
         />
       </sprite>
 
@@ -150,7 +150,7 @@ export default function LanternModel({ color, face, phase, onCoreClick }: Lanter
           opacity={0}
           side={THREE.BackSide}
           depthWrite={false}
-          blending={THREE.AdditiveBlending}
+          blending={THREE.NormalBlending}
         />
       </mesh>
 
@@ -170,27 +170,27 @@ export default function LanternModel({ color, face, phase, onCoreClick }: Lanter
             />
           </mesh>
 
-          {/* top & bottom structure */}
-          <mesh position={[0, LANTERN_HEIGHT / 2, 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <torusGeometry args={[RING_RADIUS, 0.032, 10, 48]} />
+          {/* top & bottom structure — small rings where the sphere meets the opening */}
+          <mesh position={[0, BODY_TOP_Y, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[RING_RADIUS, 0.022, 10, 48]} />
             <meshStandardMaterial color={RING_COLOR} roughness={0.62} metalness={0.05} />
           </mesh>
-          <mesh position={[0, -LANTERN_HEIGHT / 2, 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <torusGeometry args={[RING_RADIUS, 0.032, 10, 48]} />
+          <mesh position={[0, -BODY_TOP_Y, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[RING_RADIUS, 0.022, 10, 48]} />
             <meshStandardMaterial color={RING_COLOR} roughness={0.62} metalness={0.05} />
           </mesh>
           {/* caps so the openings never reveal the hollow inside */}
-          <mesh position={[0, LANTERN_HEIGHT / 2 - 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <circleGeometry args={[RING_RADIUS - 0.015, 48]} />
+          <mesh position={[0, BODY_TOP_Y + RING_CAP_HEIGHT - 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[RING_RADIUS - 0.008, 48]} />
             <meshStandardMaterial color={CAP_COLOR} roughness={0.8} side={THREE.DoubleSide} />
           </mesh>
-          <mesh position={[0, -LANTERN_HEIGHT / 2 + 0.02, 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <circleGeometry args={[RING_RADIUS - 0.015, 48]} />
+          <mesh position={[0, -(BODY_TOP_Y + RING_CAP_HEIGHT - 0.015), 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[RING_RADIUS - 0.008, 48]} />
             <meshStandardMaterial color={CAP_COLOR} roughness={0.8} side={THREE.DoubleSide} />
           </mesh>
 
           {/* light core: wick + bulb, small and quiet */}
-          <group position={[0, -LANTERN_HEIGHT / 2 + 0.12, 0]}>
+          <group position={[0, -(BODY_TOP_Y + RING_CAP_HEIGHT) + 0.1, 0]}>
             <mesh position={[0, 0.05, 0]}>
               <cylinderGeometry args={[0.028, 0.034, 0.09, 12]} />
               <meshStandardMaterial color="#2A241F" roughness={0.7} />

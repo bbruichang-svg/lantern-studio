@@ -2,6 +2,8 @@ export type LanternColor = {
   id: string
   name: string
   base: string
+  /** stroke colour of the drawn face — a darker (or lighter) shade of base, per the DTZ design system */
+  line: string
   glow: string
 }
 

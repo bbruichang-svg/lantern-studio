@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #07080b;
-  --foreground: #e9e3d8;
+  --background: #f7f4ed;
+  --foreground: #2a2622;
 }
 
 @theme inline {
@@ -20,7 +20,7 @@ body {
 }
 
 ::selection {
-  background: rgba(233, 227, 216, 0.18);
+  background: rgba(42, 38, 34, 0.15);
 }
 
 @keyframes pulse-soft {
@@ -29,7 +29,7 @@ body {
     opacity: 0.35;
   }
   50% {
-    opacity: 0.75;
+    opacity: 0.8;
   }
 }
 

@@ -31,14 +31,14 @@ export default function FacePicker({ selected, onSelect }: FacePickerProps) {
             onClick={() => onSelect(face)}
             aria-label={face.name}
             title={face.name}
-            className={`flex flex-col items-center gap-1 rounded-xl p-1.5 transition-all duration-200 hover:bg-white/5 ${
-              isSelected ? "bg-white/8 outline outline-1 outline-[#E9E3D8]" : "outline outline-1 outline-transparent"
+            className={`flex flex-col items-center gap-1 rounded-xl p-1.5 transition-all duration-200 hover:bg-black/5 ${
+              isSelected ? "bg-black/5 outline outline-1 outline-[#2A2622]" : "outline outline-1 outline-transparent"
             }`}
           >
             <FaceThumb face={face} />
             <span
               className={`text-[10px] tracking-wide transition-colors duration-200 ${
-                isSelected ? "text-[#E9E3D8]" : "text-[#E9E3D8]/55"
+                isSelected ? "text-[#2A2622]" : "text-[#2A2622]/55"
               }`}
             >
               {face.name}
