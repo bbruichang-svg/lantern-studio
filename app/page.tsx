@@ -213,12 +213,33 @@ export default function MvpPage() {
             selectedFace={face}
             onFaceSelect={handleFaceSelect}
             action={
+              /* the CTA is a small wick flame, not a pill button — the fire
+                 itself invites the click (hover brightens, click ignites) */
               <button
                 type="button"
                 onClick={lightUp}
-                className="rounded-full bg-[#E8E4DA] px-12 py-3.5 text-sm tracking-[0.5em] text-[#0B1220] transition-all duration-300 hover:bg-white"
+                aria-label="点亮"
+                className="group flex flex-col items-center gap-2.5 outline-none"
               >
-                点亮
+                <svg
+                  className="wick-flame transition-transform duration-300 group-hover:scale-110 group-focus-visible:scale-110"
+                  width="24"
+                  height="32"
+                  viewBox="0 0 24 32"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M12 1.5 C16.5 8 21 12.5 21 20.5 A9 9 0 0 1 3 20.5 C3 12.5 7.5 8 12 1.5 Z"
+                    fill="#E8944A"
+                  />
+                  <path
+                    d="M12 13 C14.5 16.5 16.5 18.5 16.5 22.5 A4.5 4.5 0 0 1 7.5 22.5 C7.5 18.5 9.5 16.5 12 13 Z"
+                    fill="#FFDFA6"
+                  />
+                </svg>
+                <span className="text-[10px] tracking-[0.5em] text-[#E8E4DA]/50 transition-colors duration-300 group-hover:text-[#E8E4DA]/90">
+                  点亮
+                </span>
               </button>
             }
           />
@@ -232,8 +253,20 @@ export default function MvpPage() {
             <span className="text-base text-[#E8E4DA]/55">☾</span>
           </div>
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center pb-[6vh] text-center">
-            <p className="text-sm tracking-[0.42em] text-[#E8E4DA]/85">今晚，灯亮了。</p>
-            <p className="mt-7 text-xl font-light tracking-[0.18em]">《{song.title}》</p>
+            {/* the lantern's own light tints the words — UI and lantern share
+                one light source via --lantern-glow (0 unlit → 1 lit) */}
+            <p
+              className="text-sm tracking-[0.42em] text-[#E8E4DA]/85"
+              style={{ textShadow: "0 0 24px rgba(255,216,170,calc(var(--lantern-glow,0)*0.6))" }}
+            >
+              今晚，灯亮了。
+            </p>
+            <p
+              className="mt-7 text-xl font-light tracking-[0.18em]"
+              style={{ textShadow: "0 0 30px rgba(255,216,170,calc(var(--lantern-glow,0)*0.45))" }}
+            >
+              《{song.title}》
+            </p>
             <p className="mt-2 text-[11px] tracking-[0.3em] text-[#E8E4DA]/50">
               {song.artist} · {song.note}
             </p>

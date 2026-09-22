@@ -89,7 +89,8 @@ function MoonDisc({ lit }: { lit: boolean }) {
   useFrame((_, delta) => {
     const k = 1 - Math.exp(-1.6 * Math.min(delta, 0.05))
     if (material.current) {
-      const o = lit ? 0.38 : 0.2
+      // narrative: the moon only reveals itself once the lantern is lit
+      const o = lit ? 0.38 : 0
       material.current.opacity += (o - material.current.opacity) * k
     }
     if (group.current) {
@@ -102,7 +103,7 @@ function MoonDisc({ lit }: { lit: boolean }) {
   return (
     <group ref={group} position={[-3.5, 2.3, -5.5]}>
       <sprite scale={[1.5, 1.5, 1]}>
-        <spriteMaterial map={texture} transparent opacity={0.2} depthWrite={false} />
+        <spriteMaterial map={texture} transparent opacity={0} depthWrite={false} />
       </sprite>
     </group>
   )

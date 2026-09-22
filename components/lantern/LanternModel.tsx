@@ -68,6 +68,8 @@ export default function LanternModel({ color, face, phase, onCoreClick }: Lanter
   const timeRef = useRef(0)
   const lightTimeRef = useRef(-1)
   const prevPhaseRef = useRef<LanternPhase>(phase)
+  // last value written to the --lantern-glow CSS var (skip redundant writes)
+  const uiGlowRef = useRef(0)
 
   const targetBase = useMemo(() => new THREE.Color(color.base), [color.base])
   const targetGlow = useMemo(() => new THREE.Color(color.glow), [color.glow])
@@ -188,6 +190,18 @@ export default function LanternModel({ color, face, phase, onCoreClick }: Lanter
     if (lit) lightTimeRef.current += dt
 
     const frame = lit ? computeLightingFrame(lightTimeRef.current) : null
+
+    // UI illumination bridge: expose the lantern's light level to the DOM
+    // as --lantern-glow so on-screen text is "lit by the lantern" — the UI
+    // and the lantern share a single light source. translucent leads (0.4s),
+    // glow completes the bloom (2.2s); max() gives a smooth 0→1.
+    if (typeof document !== "undefined") {
+      const g = frame ? Math.max(frame.translucent, frame.glow) : 0
+      if (Math.abs(g - uiGlowRef.current) > 0.008) {
+        uiGlowRef.current = g
+        document.documentElement.style.setProperty("--lantern-glow", g.toFixed(3))
+      }
+    }
 
     // gentle hanging sway, boosted briefly while lighting up
     if (swayGroup.current) {

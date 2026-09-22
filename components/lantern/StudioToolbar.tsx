@@ -31,20 +31,22 @@ export default function StudioToolbar({
   const night = tone === "night"
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center pb-5 sm:pb-7">
-      {/* expanding panel */}
+      {/* expanding panel — intentionally cardless: the controls float
+          directly in the night sky so nothing breaks the scene */}
       <div
-        className={`pointer-events-auto mb-4 origin-bottom rounded-2xl border bg-white/85 px-5 py-4 shadow-[0_8px_40px_rgba(40,32,24,0.12)] backdrop-blur-md transition-all duration-200 ${
-          night ? "border-white/15" : "border-black/8"
-        } ${mode !== null ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"}`}
+        className={`pointer-events-auto mb-4 origin-bottom px-5 py-4 transition-all duration-200 ${
+          mode !== null ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"
+        }`}
       >
         <div className={mode === "color" ? "block" : "hidden"}>
           <ColorPicker
+            tone={tone}
             selectedId={selectedColorId}
             onSelect={(c) => onColorSelect(c.id)}
           />
         </div>
         <div className={mode === "face" ? "block" : "hidden"}>
-          <FacePicker selectedId={selectedFace?.id ?? null} onSelect={onFaceSelect} />
+          <FacePicker tone={tone} selectedId={selectedFace?.id ?? null} onSelect={onFaceSelect} />
         </div>
       </div>
 

@@ -3,6 +3,9 @@
 :root {
   --background: #f7f4ed;
   --foreground: #2a2622;
+  /* lantern light level exposed by LanternModel (0 unlit → 1 fully lit);
+     on-screen text uses it so the UI is lit by the lantern itself */
+  --lantern-glow: 0;
 }
 
 @theme inline {
@@ -35,4 +38,35 @@ body {
 
 .animate-pulse-soft {
   animation: pulse-soft 2.6s ease-in-out infinite;
+}
+
+/* candle wick CTA: a barely-there flicker so the flame feels alive */
+@keyframes wick-flicker {
+  0%,
+  100% {
+    transform: scaleY(1) skewX(0deg);
+    opacity: 0.92;
+  }
+  30% {
+    transform: scaleY(1.045) skewX(-1.2deg);
+    opacity: 1;
+  }
+  55% {
+    transform: scaleY(0.97) skewX(0.8deg);
+    opacity: 0.85;
+  }
+  75% {
+    transform: scaleY(1.03) skewX(-0.6deg);
+    opacity: 0.97;
+  }
+}
+
+.wick-flame {
+  transform-origin: 50% 95%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wick-flame {
+    animation: wick-flicker 1.9s ease-in-out infinite;
+  }
 }
