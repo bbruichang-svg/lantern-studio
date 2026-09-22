@@ -13,12 +13,12 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "Lantern Studio — 画一盏灯，点亮它",
-  description: "一盏手工纸灯笼：选颜色、画表情、点亮它。",
+  title: "点一盏灯 — Make it. Light it.",
+  description: "选一盏手工纸灯笼，点亮它，收获一首属于今晚的歌。",
 }
 
 export const viewport: Viewport = {
-  themeColor: "#07080B",
+  themeColor: "#060B16",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,

@@ -40,7 +40,8 @@ const STARS: readonly { left: string; top: string; s: number; o: number }[] = [
   { left: "68%", top: "44%", s: 1, o: 0.2 },
 ]
 
-const LIGHTING_MS = 3600
+/** matches LanternLighting.LIGHTING_DURATION (2.8s) — spec §7 timeline */
+const LIGHTING_MS = 2800
 
 export default function MvpPage() {
   const [stage, setStage] = useState<MvpStage>("landing")
