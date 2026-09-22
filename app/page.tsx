@@ -1,9 +1,11 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import StudioToolbar from "@/components/lantern/StudioToolbar"
+import ShareView from "@/components/lantern/ShareView"
 import { getColorById, getDefaultFace } from "@/lib/lantern/colors"
+import { renderShareCard } from "@/lib/lantern/share-card"
 import { preloadAllFaces } from "@/lib/lantern/faces"
 import { pickSong, songLink, type MvpSong } from "@/lib/mvp/songs"
 import { track } from "@/lib/mvp/analytics"
@@ -51,7 +53,13 @@ export default function MvpPage() {
   const [face, setFace] = useState<FacePreset | null>(() => getDefaultFace("chengdu"))
   const [mode, setMode] = useState<StudioMode | null>(null)
   const [song, setSong] = useState<MvpSong | null>(null)
-  const [copied, setCopied] = useState(false)
+
+  // ---- share card state ----
+  const captureApi = useRef<(() => string) | null>(null)
+  const cardCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const [cardUrl, setCardUrl] = useState<string | null>(null)
+  const [generating, setGenerating] = useState(false)
+  const [feedback, setFeedback] = useState<string | null>(null)
 
   useEffect(() => {
     track("page_view")
@@ -66,9 +74,14 @@ export default function MvpPage() {
   const color = getColorById(colorId)
 
   // MVP stage → legacy lantern phase: landing/make are unlit ("ready"),
-  // lighting/finished drive the 2.8s internal-light timeline unchanged
+  // lighting/finished drive the 2.8s internal-light timeline unchanged;
+  // share keeps the lantern lit and mounted underneath the overlay
   const phase: LanternPhase =
-    stage === "lighting" ? "lighting" : stage === "finished" ? "finished" : "ready"
+    stage === "lighting"
+      ? "lighting"
+      : stage === "finished" || stage === "share"
+        ? "finished"
+        : "ready"
   const env = stage === "landing" || stage === "make" ? "nightDim" : "nightLit"
 
   const handleStart = useCallback(() => {
@@ -114,43 +127,95 @@ export default function MvpPage() {
     return () => window.clearTimeout(timer)
   }, [stage, colorId])
 
-  const handleShare = useCallback(async () => {
-    track("share_clicked")
-    const url = typeof window !== "undefined" ? window.location.href : ""
-    const text = song ? `今晚，我点亮了一盏灯，听见《${song.title}》。` : "今晚，灯亮了。"
-    const nav = typeof navigator !== "undefined" ? navigator : undefined
-    if (nav && typeof nav.share === "function") {
+  // ---- share card flow (spec: freeze → capture → restore) ----
+  const openShare = useCallback(() => {
+    // share_clicked kept for backwards compatibility with the original entry
+    track("share_clicked", { color: colorId })
+    track("share_opened")
+    setStage("share")
+  }, [colorId])
+
+  const closeShare = useCallback(() => {
+    track("share_closed")
+    setCardUrl(null)
+    cardCanvasRef.current = null
+    setStage("finished")
+  }, [])
+
+  useEffect(() => {
+    if (stage !== "share" || !song) return
+    let cancelled = false
+    const timer = window.setTimeout(async () => {
+      setGenerating(true)
+      setFeedback(null)
       try {
-        await nav.share({ title: "点一盏灯", text, url })
-        return
-      } catch (e) {
-        // user closed the share sheet — don't also drop a link in the clipboard
-        if (e instanceof Error && e.name === "AbortError") return
-        // share unavailable/failed (e.g. unsupported context) → clipboard fallback
-      }
-    }
-    try {
-      await nav?.clipboard?.writeText(`${text} ${url}`)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 2400)
-    } catch {
-      // legacy fallback: temporary textarea + execCommand (works on http pages)
-      try {
-        const ta = document.createElement("textarea")
-        ta.value = `${text} ${url}`
-        ta.style.position = "fixed"
-        ta.style.opacity = "0"
-        document.body.appendChild(ta)
-        ta.select()
-        document.execCommand("copy")
-        document.body.removeChild(ta)
-        setCopied(true)
-        window.setTimeout(() => setCopied(false), 2400)
+        const shot = captureApi.current?.()
+        if (!shot) throw new Error("canvas capture unavailable")
+        const canvas = await renderShareCard({
+          lanternCapture: shot,
+          songTitle: song.title,
+          artist: song.artist,
+          year: 2026,
+        })
+        if (cancelled) return
+        cardCanvasRef.current = canvas
+        setCardUrl(canvas.toDataURL("image/png"))
       } catch {
-        // clipboard truly unavailable — nothing else to do in the MVP
+        if (!cancelled) setFeedback("生成失败，请重试")
+      } finally {
+        if (!cancelled) setGenerating(false)
+      }
+    }, 420) // let the freeze settle (no sway, light stable) before capturing
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [stage, song])
+
+  const showFeedback = useCallback((text: string) => {
+    setFeedback(text)
+    window.setTimeout(() => setFeedback(null), 1500)
+  }, [])
+
+  const saveCard = useCallback(async () => {
+    const canvas = cardCanvasRef.current
+    if (!canvas) return
+    const nav = typeof navigator !== "undefined" ? navigator : undefined
+    const text = song ? `今晚，我点亮了一盏灯，听见《${song.title}》。` : "今晚，灯亮了。"
+    const url = typeof window !== "undefined" ? window.location.href : ""
+
+    // mobile first: Web Share API with the image as a File (spec §14)
+    const canShareFiles =
+      !!nav &&
+      typeof nav.share === "function" &&
+      "canShare" in nav &&
+      typeof nav.canShare === "function"
+    if (canShareFiles) {
+      try {
+        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"))
+        if (!blob) throw new Error("blob failed")
+        const file = new File([blob], "lantern-2026.png", { type: "image/png" })
+        if (nav.canShare({ files: [file] })) {
+          await nav.share({ files: [file], text, url })
+          track("share_native")
+          showFeedback("已分享")
+          return
+        }
+      } catch (e) {
+        // user closed the share sheet — not an error
+        if (e instanceof Error && e.name === "AbortError") return
+        // fall through to download
       }
     }
-  }, [song])
+
+    // desktop / unsupported fallback: download the PNG
+    const a = document.createElement("a")
+    a.href = canvas.toDataURL("image/png")
+    a.download = "lantern-2026.png"
+    a.click()
+    track("share_downloaded")
+    showFeedback("已保存")
+  }, [song, showFeedback])
 
   return (
     <main className="relative h-dvh w-full overflow-hidden bg-[#060B16] text-[#E8E4DA]">
@@ -180,7 +245,16 @@ export default function MvpPage() {
         ))}
       </div>
 
-      <LanternScene color={color} face={face} phase={phase} env={env} moon onCoreClick={handleCoreClick} />
+      <LanternScene
+        color={color}
+        face={face}
+        phase={phase}
+        env={env}
+        moon
+        onCoreClick={handleCoreClick}
+        paused={generating}
+        captureApiRef={captureApi}
+      />
 
       {/* ---------------- LANDING ---------------- */}
       {stage === "landing" && (
@@ -280,16 +354,28 @@ export default function MvpPage() {
               >
                 去听这首歌
               </a>
+              {/* lightweight share entry — thin text, no button card (spec §3) */}
               <button
                 type="button"
-                onClick={handleShare}
-                className="rounded-full px-9 py-3 text-xs tracking-[0.3em] text-[#E8E4DA]/80 outline outline-1 outline-[#E8E4DA]/30 transition-colors duration-200 hover:text-[#E8E4DA]"
+                onClick={openShare}
+                className="text-[11px] tracking-[0.32em] text-[#E8E4DA]/55 underline decoration-[#E8E4DA]/20 underline-offset-8 transition-colors duration-200 hover:text-[#E8E4DA] hover:decoration-[#E8E4DA]/60"
               >
-                {copied ? "链接已复制" : "分享这盏灯"}
+                分享我的灯笼
               </button>
             </div>
           </div>
         </>
+      )}
+
+      {/* ---------------- SHARE (full-screen, lantern stays lit below) ---------------- */}
+      {stage === "share" && (
+        <ShareView
+          cardUrl={cardUrl}
+          generating={generating}
+          feedback={feedback}
+          onSave={saveCard}
+          onClose={closeShare}
+        />
       )}
     </main>
   )

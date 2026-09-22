@@ -14,6 +14,8 @@ type LanternModelProps = {
   face: FacePreset | null
   phase: LanternPhase
   onCoreClick: () => void
+  /** freeze all animation (sway timeline stops) — used while capturing the share card */
+  paused?: boolean
 }
 
 const RING_COLOR = "#24201D"
@@ -44,7 +46,7 @@ function makeBloomTexture(): THREE.CanvasTexture {
   return tex
 }
 
-export default function LanternModel({ color, face, phase, onCoreClick }: LanternModelProps) {
+export default function LanternModel({ color, face, phase, onCoreClick, paused = false }: LanternModelProps) {
   const lanternTexture = useMemo(() => new LanternCanvas(), [])
   const geometry = useMemo(() => buildLanternGeometry(), [])
   const bloomTexture = useMemo(() => makeBloomTexture(), [])
@@ -177,6 +179,7 @@ export default function LanternModel({ color, face, phase, onCoreClick }: Lanter
   }, [geometry, lanternTexture, bloomTexture])
 
   useFrame((_, delta) => {
+    if (paused) return // frozen for share-card capture: no sway, no light drift
     const dt = Math.min(delta, 0.05)
     timeRef.current += dt
 

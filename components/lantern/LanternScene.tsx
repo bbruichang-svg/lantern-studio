@@ -1,8 +1,8 @@
 "use client"
 
-import { useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import * as THREE from "three"
-import { Canvas, useFrame } from "@react-three/fiber"
+import { Canvas, useFrame, useThree } from "@react-three/fiber"
 import { OrbitControls } from "@react-three/drei"
 import LanternModel from "./LanternModel"
 import type { FacePreset, LanternColor, LanternPhase } from "@/lib/lantern/types"
@@ -16,6 +16,70 @@ type LanternSceneProps = {
   env?: "studio" | "nightDim" | "nightLit"
   /** faint ambient moon (MVP hero scene only) */
   moon?: boolean
+  /** freeze animation (share-card capture) */
+  paused?: boolean
+  /** filled with a capture() function that returns the WebGL canvas as a PNG data URL */
+  captureApiRef?: { current: (() => string) | null }
+}
+
+/** registers a synchronous canvas-capture function for the share card */
+function CaptureBridge({ apiRef }: { apiRef: { current: (() => string) | null } }) {
+  const gl = useThree((s) => s.gl)
+  const scene = useThree((s) => s.scene)
+  const camera = useThree((s) => s.camera)
+
+  useEffect(() => {
+    apiRef.current = () => {
+      const cam = camera as THREE.PerspectiveCamera
+      // reframe for the card: pull back so the lantern spans ~50% of the
+      // card height once the square crop (min(w, 0.92h)) is scaled to 1080.
+      // freeze → capture → restore, all synchronous (no rAF in between).
+      const prevPos = cam.position.clone()
+      const prevQuat = cam.quaternion.clone()
+      const aspect = cam.aspect
+      const fill = Math.min(0.5635, 0.6125 * aspect) // lantern height / capture height
+      const d = 1.1 / Math.tan((fill * cam.fov * Math.PI) / 360) + 1.06
+      cam.position.set(0, 0.55, d)
+      cam.lookAt(0, 0, 0)
+      gl.render(scene, cam)
+      const url = gl.domElement.toDataURL("image/png")
+      cam.position.copy(prevPos)
+      cam.quaternion.copy(prevQuat)
+      gl.render(scene, cam) // put the live view back immediately
+      return url
+    }
+    return () => {
+      apiRef.current = null
+    }
+  }, [apiRef, gl, scene, camera])
+
+  return null
+}
+
+/**
+ * Pull the camera back on narrow (portrait) viewports so the lantern fits
+ * the horizontal frustum — at fov 35 a 390-wide phone would otherwise clip
+ * the lantern's sides. Wide/desktop viewports keep the original distance.
+ */
+function CameraFit() {
+  const camera = useThree((s) => s.camera)
+  const size = useThree((s) => s.size)
+  const didFit = useRef(false)
+
+  useEffect(() => {
+    if (didFit.current || size.width === 0) return
+    didFit.current = true
+    const aspect = size.width / size.height
+    const vHalf = Math.tan((35 * Math.PI) / 360)
+    const hHalf = vHalf * aspect
+    // lantern radius ≈1.1 world units, keep it ≤82% of the frame width
+    const dH = 1.1 / (0.82 * hHalf) + 1.06
+    const d = Math.max(5.4, dH)
+    camera.position.set(0, 0.55, d)
+    camera.lookAt(0, 0, 0)
+  }, [camera, size])
+
+  return null
 }
 
 type EnvPreset = { amb: number; key: number; fill: number; night: number }
@@ -109,7 +173,16 @@ function MoonDisc({ lit }: { lit: boolean }) {
   )
 }
 
-export default function LanternScene({ color, face, phase, onCoreClick, env, moon }: LanternSceneProps) {
+export default function LanternScene({
+  color,
+  face,
+  phase,
+  onCoreClick,
+  env,
+  moon,
+  paused,
+  captureApiRef,
+}: LanternSceneProps) {
   const resolvedEnv: "studio" | "nightDim" | "nightLit" =
     env ?? (phase === "studio" || phase === "ready" ? "studio" : "nightLit")
   const lit = phase === "lighting" || phase === "finished"
@@ -119,12 +192,20 @@ export default function LanternScene({ color, face, phase, onCoreClick, env, moo
       className="!absolute inset-0"
       dpr={[1, 2]}
       camera={{ fov: 35, position: [0, 0.55, 5.4], near: 0.1, far: 60 }}
-      gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
+      gl={{
+        antialias: true,
+        alpha: true,
+        powerPreference: "high-performance",
+        // keep the drawing buffer readable so the share card can capture it
+        preserveDrawingBuffer: true,
+      }}
     >
       <EnvironmentLights env={resolvedEnv} />
       {moon && <MoonDisc lit={lit} />}
 
-      <LanternModel color={color} face={face} phase={phase} onCoreClick={onCoreClick} />
+      <LanternModel color={color} face={face} phase={phase} onCoreClick={onCoreClick} paused={paused} />
+      <CameraFit />
+      {captureApiRef && <CaptureBridge apiRef={captureApiRef} />}
 
       <OrbitControls
         enablePan={false}
@@ -133,7 +214,7 @@ export default function LanternScene({ color, face, phase, onCoreClick, env, moo
         rotateSpeed={0.65}
         zoomSpeed={0.6}
         minDistance={3.4}
-        maxDistance={7.5}
+        maxDistance={14}
         minPolarAngle={0.85}
         maxPolarAngle={2.05}
         target={[0, 0, 0]}

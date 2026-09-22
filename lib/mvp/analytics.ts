@@ -12,6 +12,10 @@ export type MvpEvent =
   | "light_completed"
   | "song_clicked"
   | "share_clicked"
+  | "share_opened"
+  | "share_downloaded"
+  | "share_native"
+  | "share_closed"
 
 type Payload = Record<string, string | number>
 type Sink = (event: MvpEvent, payload?: Payload) => void
