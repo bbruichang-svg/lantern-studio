@@ -30,11 +30,11 @@ export default function StudioToolbar({
 }: StudioToolbarProps) {
   const night = tone === "night"
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center pb-5 sm:pb-7">
-      {/* expanding panel — intentionally cardless: the controls float
-          directly in the night sky so nothing breaks the scene */}
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center pb-3 sm:pb-4">
+      {/* expanding panel — intentionally cardless and compact: one thin
+          strip hugging the bottom edge so the lantern silhouette stays clear */}
       <div
-        className={`pointer-events-auto mb-4 origin-bottom px-5 py-4 transition-all duration-200 ${
+        className={`pointer-events-auto mb-2.5 origin-bottom px-4 py-2 transition-all duration-200 ${
           mode !== null ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0"
         }`}
       >
@@ -50,8 +50,8 @@ export default function StudioToolbar({
         </div>
       </div>
 
-      {/* mode tabs */}
-      <div className="pointer-events-auto flex items-center gap-2">
+      {/* mode tabs — small, quiet, unobtrusive */}
+      <div className="pointer-events-auto flex items-center gap-1.5">
         {(
           [
             ["color", "COLOR"],
@@ -62,11 +62,11 @@ export default function StudioToolbar({
             key={value}
             type="button"
             onClick={() => onModeChange(mode === value ? null : value)}
-            className={`rounded-full px-6 py-2.5 text-xs tracking-[0.2em] transition-all duration-200 ${
+            className={`rounded-full px-4 py-1.5 text-[10px] tracking-[0.2em] transition-all duration-200 ${
               night
                 ? mode === value
                   ? "bg-white/10 text-[#E8E4DA] outline outline-1 outline-[#E8E4DA]/50"
-                  : "text-[#E8E4DA]/55 hover:bg-white/5 hover:text-[#E8E4DA]/85"
+                  : "text-[#E8E4DA]/50 hover:bg-white/5 hover:text-[#E8E4DA]/85"
                 : mode === value
                   ? "bg-[#2A2622]/8 text-[#2A2622] outline outline-1 outline-[#2A2622]/35"
                   : "text-[#2A2622]/55 hover:bg-black/5 hover:text-[#2A2622]/85"
@@ -78,7 +78,7 @@ export default function StudioToolbar({
       </div>
 
       {/* optional primary action */}
-      {action && <div className="pointer-events-auto mt-4 flex justify-center">{action}</div>}
+      {action && <div className="pointer-events-auto mt-2.5 flex justify-center">{action}</div>}
     </div>
   )
 }
