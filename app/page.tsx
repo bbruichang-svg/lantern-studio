@@ -4,11 +4,19 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import StudioToolbar from "@/components/lantern/StudioToolbar"
 import ShareView from "@/components/lantern/ShareView"
-import { getColorById, getDefaultFace } from "@/lib/lantern/colors"
+import { getColorById, getDefaultFace, getFaceById } from "@/lib/lantern/colors"
 import { renderShareCard } from "@/lib/lantern/share-card"
 import { preloadAllFaces } from "@/lib/lantern/faces"
-import { pickSong, songLink, type MvpSong } from "@/lib/mvp/songs"
+import { pickSong, songLink, getSongById, type MvpSong } from "@/lib/mvp/songs"
 import { track } from "@/lib/mvp/analytics"
+import {
+  BLESSING_MAX,
+  EXAMPLE_BLESSINGS,
+  pickInspiration,
+  isBlessingAllowed,
+} from "@/lib/mvp/blessings"
+import { addLantern, litCount, formatNumber } from "@/lib/mvp/storage"
+import { lanternLink, readLanternFromSearch, type LanternPayload } from "@/lib/mvp/share"
 import type { FacePreset, LanternPhase, MvpStage, StudioMode } from "@/lib/lantern/types"
 
 const LanternScene = dynamic(() => import("@/components/lantern/LanternScene"), {
@@ -45,6 +53,14 @@ const STARS: readonly { left: string; top: string; s: number; o: number }[] = [
 /** matches LanternLighting.LIGHTING_DURATION (2.8s) — spec §7 timeline */
 const LIGHTING_MS = 2800
 
+/** 首页计数四档文案 — 本机口径，数字永远真实（PRD §7） */
+function counterCopy(n: number): { main: string; sub: string } {
+  if (n === 0) return { main: "灯会初亮，火种已备", sub: "点亮你的第一盏灯" }
+  if (n < 50) return { main: `你是第 ${n} 位点灯人`, sub: "月色正好，再添一盏" }
+  if (n < 1000) return { main: `你已亲手点亮 ${n} 盏灯`, sub: "千灯映月，皆是心意" }
+  return { main: `你已亲手点亮 ${n.toLocaleString()} 盏灯`, sub: "灯火连成星河，皆出你手" }
+}
+
 export default function MvpPage() {
   const [stage, setStage] = useState<MvpStage>("landing")
   const [colorId, setColorId] = useState<string>("chengdu")
@@ -61,9 +77,40 @@ export default function MvpPage() {
   const [generating, setGenerating] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
 
+  // ---- blessing step (PRD F1 写祝福) ----
+  const [blessing, setBlessing] = useState("")
+  const [inspiration, setInspiration] = useState<string[]>(() => pickInspiration())
+  // ---- 先落盘后动画：本机编号在点亮瞬间写入 localStorage ----
+  const [litNo, setLitNo] = useState(0)
+  // ---- a lantern restored from a share link (?l=...) — skips the flow ----
+  const [shared, setShared] = useState<LanternPayload | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimer = useRef<number | undefined>(undefined)
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg)
+    window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(null), 2600)
+  }, [])
+
   useEffect(() => {
     track("page_view")
-  }, [])
+    // share-link restore runs before anything else — zero network, local only.
+    // queued as a microtask: it's one-shot init from an external system (the
+    // URL), and keeps the effect free of synchronous setState.
+    queueMicrotask(() => {
+      const search = window.location.search
+      const payload = readLanternFromSearch(search)
+      if (payload) {
+        track("share_link_opened")
+        setShared(payload)
+        setStage("finished")
+      } else if (new URLSearchParams(search).has("l")) {
+        // param present but truncated/tampered → soft fallback, never an error dump
+        showToast("灯的线索丢了，先去灯会逛逛吧")
+      }
+    })
+  }, [showToast])
   // (dev StrictMode mounts effects twice; production fires once)
 
   // warm the face-thumbnail cache so the FACE grid opens instantly
@@ -73,7 +120,14 @@ export default function MvpPage() {
 
   const color = getColorById(colorId)
 
-  // MVP stage → legacy lantern phase: landing/make are unlit ("ready"),
+  // what the 3D scene shows — the user's own lantern, or a shared one
+  const sceneColor = shared ? getColorById(shared.c) : color
+  const sceneFace = shared ? getFaceById(shared.f) ?? getDefaultFace(shared.c) : face
+  const sceneSong = shared ? getSongById(shared.s) : song
+  const sceneBlessing = shared ? shared.b : blessing.trim()
+  const sceneNo = shared ? shared.n : litNo
+
+  // MVP stage → legacy lantern phase: landing/make/blessing are unlit ("ready"),
   // lighting/finished drive the 2.8s internal-light timeline unchanged;
   // share keeps the lantern lit and mounted underneath the overlay
   const phase: LanternPhase =
@@ -82,7 +136,8 @@ export default function MvpPage() {
       : stage === "finished" || stage === "share"
         ? "finished"
         : "ready"
-  const env = stage === "landing" || stage === "make" ? "nightDim" : "nightLit"
+  const env =
+    stage === "landing" || stage === "make" || stage === "blessing" ? "nightDim" : "nightLit"
 
   const handleStart = useCallback(() => {
     track("start_clicked")
@@ -106,17 +161,39 @@ export default function MvpPage() {
     [],
   )
 
-  const lightUp = useCallback(() => {
-    track("light_clicked", { color: colorId })
+  // the flame CTA / the wick itself now lead to the blessing step —
+  // 点灯提交统一在写祝福步骤完成（PRD F1-E6/E10/E12）
+  const goBlessing = useCallback(() => {
+    if (stage !== "make") return
     setMode(null)
-    setSong(pickSong())
-    setStage("lighting")
-  }, [colorId])
+    setStage("blessing")
+  }, [stage])
 
-  // clicking the wick itself also lights it up (make stage only)
   const handleCoreClick = useCallback(() => {
-    if (stage === "make") lightUp()
-  }, [stage, lightUp])
+    if (stage === "make") goBlessing()
+  }, [stage, goBlessing])
+
+  const handleLight = useCallback(() => {
+    const text = blessing.trim()
+    if (!text) return
+    if (!isBlessingAllowed(text)) {
+      showToast("寄语包含不被允许的内容，请修改")
+      return
+    }
+    track("light_clicked", { color: colorId })
+    const picked = pickSong()
+    // 先落盘、后动画（E12/E14）：storage 不可用时走内存降级，流程不中断
+    const res = addLantern({
+      colorId,
+      faceId: face?.id ?? "",
+      blessing: text,
+      songId: picked.id,
+    })
+    setLitNo(res.record.no)
+    setSong(picked)
+    setStage("lighting")
+    if (res.trimmed) showToast("本机空间不足，最早的灯将被清理")
+  }, [blessing, colorId, face, showToast])
 
   useEffect(() => {
     if (stage !== "lighting") return
@@ -140,6 +217,17 @@ export default function MvpPage() {
     setCardUrl(null)
     cardCanvasRef.current = null
     setStage("finished")
+  }, [])
+
+  // 我也点一盏 — enter the flow with a clean slate (URL param scrubbed)
+  const handleRelight = useCallback(() => {
+    setShared(null)
+    setBlessing("")
+    setSong(null)
+    window.history.replaceState(null, "", window.location.pathname)
+    track("start_clicked")
+    setMode("color")
+    setStage("make")
   }, [])
 
   useEffect(() => {
@@ -178,12 +266,48 @@ export default function MvpPage() {
     window.setTimeout(() => setFeedback(null), 1500)
   }, [])
 
+  /** 免库分享链接 — 灯的完整配置编码进 URL 参数（相对路径，换域名不失效） */
+  const buildLanternUrl = useCallback(() => {
+    const link = lanternLink({
+      c: colorId,
+      f: face?.id ?? "",
+      b: blessing.trim(),
+      s: song?.id ?? "",
+      n: litNo,
+    })
+    return new URL(link, window.location.origin).toString()
+  }, [colorId, face, blessing, song, litNo])
+
+  const copyLanternLink = useCallback(async () => {
+    const url = buildLanternUrl()
+    const nav = typeof navigator !== "undefined" ? navigator : undefined
+    const text = blessing.trim() ? `我点了一盏灯：「${blessing.trim()}」` : "今晚，灯亮了。"
+    try {
+      await nav?.clipboard?.writeText(`${text} ${url}`)
+      showFeedback("链接已复制，去粘贴给朋友吧")
+    } catch {
+      try {
+        const ta = document.createElement("textarea")
+        ta.value = `${text} ${url}`
+        ta.style.position = "fixed"
+        ta.style.opacity = "0"
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand("copy")
+        document.body.removeChild(ta)
+        showFeedback("链接已复制，去粘贴给朋友吧")
+      } catch {
+        showFeedback("复制失败，请手动复制地址栏链接")
+      }
+    }
+  }, [buildLanternUrl, blessing, showFeedback])
+
   const saveCard = useCallback(async () => {
     const canvas = cardCanvasRef.current
     if (!canvas) return
     const nav = typeof navigator !== "undefined" ? navigator : undefined
     const text = song ? `今晚，我点亮了一盏灯，听见《${song.title}》。` : "今晚，灯亮了。"
-    const url = typeof window !== "undefined" ? window.location.href : ""
+    const url = buildLanternUrl()
 
     // mobile first: Web Share API with the image as a File (spec §14)
     const canShareFiles =
@@ -216,7 +340,7 @@ export default function MvpPage() {
     a.click()
     track("share_downloaded")
     showFeedback("已保存")
-  }, [song, showFeedback])
+  }, [song, showFeedback, buildLanternUrl])
 
   return (
     <main className="relative h-dvh w-full overflow-hidden bg-[#060B16] text-[#E8E4DA]">
@@ -247,8 +371,8 @@ export default function MvpPage() {
       </div>
 
       <LanternScene
-        color={color}
-        face={face}
+        color={sceneColor}
+        face={sceneFace}
         phase={phase}
         env={env}
         moon
@@ -259,8 +383,10 @@ export default function MvpPage() {
 
       {/* ---------------- LANDING ---------------- */}
       {stage === "landing" && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-end pb-[13vh]">
-          <h1 className="text-3xl font-light tracking-[0.42em] sm:text-4xl">点一盏灯</h1>
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-end pb-[11vh]">
+          {/* 计数四档文案 — 本机口径，数字永远真实（PRD §7） */}
+          <p className="text-xs tracking-[0.3em] text-[#E8E4DA]/60">{counterCopy(litCount()).main}</p>
+          <h1 className="mt-4 text-3xl font-light tracking-[0.42em] sm:text-4xl">点一盏灯</h1>
           <p className="mt-3 text-[11px] tracking-[0.4em] text-[#E8E4DA]/55">MAKE IT. LIGHT IT.</p>
           <button
             type="button"
@@ -269,6 +395,9 @@ export default function MvpPage() {
           >
             ENTER
           </button>
+          <p className="mt-5 text-[10px] tracking-[0.25em] text-[#E8E4DA]/40">
+            {counterCopy(litCount()).sub}
+          </p>
         </div>
       )}
 
@@ -288,12 +417,12 @@ export default function MvpPage() {
             selectedFace={face}
             onFaceSelect={handleFaceSelect}
             action={
-              /* the CTA is a small wick flame, not a pill button — the fire
-                 itself invites the click (hover brightens, click ignites) */
+              /* the CTA is a small wick flame — the fire itself invites the
+                 click (hover brightens, click moves to the blessing step) */
               <button
                 type="button"
-                onClick={lightUp}
-                aria-label="点亮"
+                onClick={goBlessing}
+                aria-label="下一步：写祝福"
                 className="group flex flex-col items-center gap-2.5 outline-none"
               >
                 <svg
@@ -313,7 +442,7 @@ export default function MvpPage() {
                   />
                 </svg>
                 <span className="text-[10px] tracking-[0.5em] text-[#E8E4DA]/50 transition-colors duration-300 group-hover:text-[#E8E4DA]/90">
-                  点亮
+                  写祝福
                 </span>
               </button>
             }
@@ -321,13 +450,23 @@ export default function MvpPage() {
         </div>
       )}
 
-      {/* ---------------- FINISHED ---------------- */}
-      {stage === "finished" && song && (
+      {/* ---------------- FINISHED (own lamp & shared lamp) ---------------- */}
+      {stage === "finished" && (shared || song) && (
         <>
           <div className="pointer-events-none absolute inset-x-0 top-7 z-10 flex justify-center">
             <span className="text-base text-[#E8E4DA]/55">☾</span>
           </div>
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center pb-[4vh] text-center">
+            {shared && (
+              <p className="text-[10px] tracking-[0.35em] text-[#E8E4DA]/40">朋友点亮的灯</p>
+            )}
+            {/* 本机编号 — No.XXXXX 5 位补零 */}
+            <p
+              className="mt-1 text-[10px] tracking-[0.35em] text-[#E8E4DA]/40"
+              style={{ textShadow: "0 0 20px rgba(255,216,170,calc(var(--lantern-glow,0)*0.4))" }}
+            >
+              {formatNumber(sceneNo)}
+            </p>
             {/* the lantern's own light tints the words — UI and lantern share
                 one light source via --lantern-glow (0 unlit → 1 lit) */}
             <p
@@ -336,40 +475,144 @@ export default function MvpPage() {
             >
               今晚，灯亮了。
             </p>
+            {sceneBlessing && (
+              <p className="mt-3.5 max-w-[min(80vw,26em)] text-base leading-relaxed tracking-[0.06em] text-[#E8E4DA]/90">
+                「{sceneBlessing}」
+              </p>
+            )}
             {/* the moon line — rises out of the night after the light settles */}
-            <p className="animate-lyric mt-3.5 max-w-[min(80vw,36em)] text-xs font-light leading-relaxed tracking-[0.2em] text-[#E8E4DA]/60">
-              “{song.moonLyric}”
-            </p>
-            <p
-              className="mt-3 text-xl font-light tracking-[0.18em]"
-              style={{ textShadow: "0 0 30px rgba(255,216,170,calc(var(--lantern-glow,0)*0.45))" }}
-            >
-              《{song.title}》
-            </p>
-            <p className="mt-1.5 text-[11px] tracking-[0.3em] text-[#E8E4DA]/50">
-              {song.artist}
-            </p>
+            {sceneSong && (
+              <p className="animate-lyric mt-3.5 max-w-[min(80vw,36em)] text-xs font-light leading-relaxed tracking-[0.2em] text-[#E8E4DA]/60">
+                “{sceneSong.moonLyric}”
+              </p>
+            )}
+            {sceneSong && (
+              <p
+                className="mt-3 text-xl font-light tracking-[0.18em]"
+                style={{ textShadow: "0 0 30px rgba(255,216,170,calc(var(--lantern-glow,0)*0.45))" }}
+              >
+                《{sceneSong.title}》
+              </p>
+            )}
+            {sceneSong && (
+              <p className="mt-1.5 text-[11px] tracking-[0.3em] text-[#E8E4DA]/50">
+                {sceneSong.artist}
+              </p>
+            )}
             <div className="pointer-events-auto mt-6 flex flex-col items-center gap-3">
-              <a
-                href={songLink(song)}
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => track("song_clicked", { song: song.title })}
-                className="rounded-full bg-[#E8E4DA] px-9 py-3 text-sm tracking-[0.3em] text-[#0B1220] transition-colors duration-200 hover:bg-white"
-              >
-                去听这首歌
-              </a>
-              {/* lightweight share entry — thin text, no button card (spec §3) */}
-              <button
-                type="button"
-                onClick={openShare}
-                className="text-[11px] tracking-[0.32em] text-[#E8E4DA]/55 underline decoration-[#E8E4DA]/20 underline-offset-8 transition-colors duration-200 hover:text-[#E8E4DA] hover:decoration-[#E8E4DA]/60"
-              >
-                分享我的灯笼
-              </button>
+              {shared ? (
+                <button
+                  type="button"
+                  onClick={handleRelight}
+                  className="rounded-full bg-[#E8E4DA] px-9 py-3 text-sm tracking-[0.3em] text-[#0B1220] transition-colors duration-200 hover:bg-white"
+                >
+                  我也点一盏
+                </button>
+              ) : (
+                <>
+                  {song && (
+                    <a
+                      href={songLink(song)}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => track("song_clicked", { song: song.title })}
+                      className="rounded-full bg-[#E8E4DA] px-9 py-3 text-sm tracking-[0.3em] text-[#0B1220] transition-colors duration-200 hover:bg-white"
+                    >
+                      去听这首歌
+                    </a>
+                  )}
+                  {/* lightweight share entry — thin text, no button card (spec §3) */}
+                  <button
+                    type="button"
+                    onClick={openShare}
+                    className="text-[11px] tracking-[0.32em] text-[#E8E4DA]/55 underline decoration-[#E8E4DA]/20 underline-offset-8 transition-colors duration-200 hover:text-[#E8E4DA] hover:decoration-[#E8E4DA]/60"
+                  >
+                    分享我的灯笼
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </>
+      )}
+
+      {/* ---------------- BLESSING (独立步骤，20 字上限) ---------------- */}
+      {stage === "blessing" && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center px-6 pb-[8vh] text-center">
+          <p className="text-[10px] tracking-[0.45em] text-[#E8E4DA]/50">给这盏灯写一句话</p>
+          <div className="mt-6 w-full max-w-sm rounded-2xl border border-white/15 bg-white/[0.08] px-5 py-4 backdrop-blur-md">
+            <input
+              value={blessing}
+              maxLength={BLESSING_MAX}
+              autoFocus
+              onChange={(e) => setBlessing(e.target.value)}
+              placeholder="写一句祝福…"
+              className="w-full bg-transparent text-center text-lg tracking-[0.08em] text-[#E8E4DA] outline-none placeholder:text-[#E8E4DA]/30"
+            />
+            <p className="mt-1 text-right text-[10px] tracking-[0.2em] text-[#E8E4DA]/40">
+              剩余 {BLESSING_MAX - blessing.length} 字
+            </p>
+          </div>
+
+          {/* 固定示例句 — 点击直接填入 */}
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+            {EXAMPLE_BLESSINGS.map((x) => (
+              <button
+                key={x}
+                type="button"
+                onClick={() => setBlessing(x)}
+                className="rounded-full border border-white/12 px-4 py-2 text-xs text-[#E8E4DA]/70 transition-colors duration-200 hover:bg-white/10 hover:text-[#E8E4DA]"
+              >
+                {x}
+              </button>
+            ))}
+          </div>
+
+          {/* 本地灵感库（随包内置、零网络请求） */}
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+            {inspiration.map((x) => (
+              <button
+                key={x}
+                type="button"
+                onClick={() => setBlessing(x)}
+                className="rounded-full px-4 py-2 text-xs text-[#E8E4DA]/55 outline outline-1 outline-white/10 transition-colors duration-200 hover:bg-white/10 hover:text-[#E8E4DA]"
+              >
+                {x}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setInspiration(pickInspiration(new Set(inspiration)))}
+              className="rounded-full px-3 py-2 text-[10px] tracking-[0.2em] text-[#E8E4DA]/40 transition-colors duration-200 hover:text-[#E8E4DA]/80"
+            >
+              换一批
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleLight}
+            disabled={!blessing.trim()}
+            className="mt-9 rounded-full bg-[#E8E4DA] px-12 py-3.5 text-sm tracking-[0.5em] text-[#0B1220] transition-all duration-300 hover:bg-white disabled:opacity-35"
+          >
+            点亮这盏灯
+          </button>
+          {!blessing.trim() && (
+            <p className="mt-3 text-[10px] tracking-[0.25em] text-[#E8E4DA]/40">
+              写一句祝福，或从上方灵感中挑一句
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setMode("color")
+              setStage("make")
+            }}
+            className="mt-4 text-[10px] tracking-[0.3em] text-[#E8E4DA]/40 transition-colors duration-200 hover:text-[#E8E4DA]/75"
+          >
+            ‹ 返回修改灯笼
+          </button>
+        </div>
       )}
 
       {/* ---------------- SHARE (full-screen, lantern stays lit below) ---------------- */}
@@ -379,9 +622,23 @@ export default function MvpPage() {
           generating={generating}
           feedback={feedback}
           onSave={saveCard}
+          onCopyLink={copyLanternLink}
           onClose={closeShare}
         />
       )}
+      {/* toast — soft notices, never error dumps */}
+      {toast && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-24 z-40 flex justify-center">
+          <p className="rounded-full bg-black/60 px-5 py-2.5 text-xs tracking-[0.15em] text-[#E8E4DA]/90 backdrop-blur">
+            {toast}
+          </p>
+        </div>
+      )}
+
+      {/* 署名角标（个人项目定位，PRD 合规精神的轻量版） */}
+      <p className="pointer-events-none absolute bottom-2.5 left-4 z-20 text-[9px] tracking-[0.2em] text-[#E8E4DA]/25">
+        非官方粉丝二创 · 图案素材：大头仔 DTZ
+      </p>
     </main>
   )
 }

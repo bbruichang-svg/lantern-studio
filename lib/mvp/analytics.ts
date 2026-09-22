@@ -12,6 +12,7 @@ export type MvpEvent =
   | "light_completed"
   | "song_clicked"
   | "share_clicked"
+  | "share_link_opened"
   | "share_opened"
   | "share_downloaded"
   | "share_native"

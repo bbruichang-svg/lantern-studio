@@ -6,9 +6,10 @@ type ShareViewProps = {
   /** composed 1080×1350 card as PNG data URL (null while generating) */
   cardUrl: string | null
   generating: boolean
-  /** light transient feedback: 「已保存」/「已分享」 */
+  /** light transient feedback: 「已保存」/「已分享」/「链接已复制」 */
   feedback: string | null
   onSave: () => void
+  onCopyLink?: () => void
   onClose: () => void
 }
 
@@ -17,7 +18,14 @@ type ShareViewProps = {
  * a × sits top-left, the finished card is the centre of attention.
  * No modal chrome, no glass, no decorative borders.
  */
-export default function ShareView({ cardUrl, generating, feedback, onSave, onClose }: ShareViewProps) {
+export default function ShareView({
+  cardUrl,
+  generating,
+  feedback,
+  onSave,
+  onCopyLink,
+  onClose,
+}: ShareViewProps) {
   return (
     <div
       className="absolute inset-0 z-30 flex flex-col"
@@ -53,7 +61,7 @@ export default function ShareView({ cardUrl, generating, feedback, onSave, onClo
         )}
       </div>
 
-      {/* single quiet action + light feedback */}
+      {/* quiet actions + light feedback */}
       <div className="flex flex-col items-center gap-3 pb-[4.5vh] pt-5">
         <button
           type="button"
@@ -63,6 +71,15 @@ export default function ShareView({ cardUrl, generating, feedback, onSave, onClo
         >
           保存我的灯笼
         </button>
+        {onCopyLink && (
+          <button
+            type="button"
+            onClick={onCopyLink}
+            className="text-[10px] tracking-[0.3em] text-[#E8E4DA]/45 transition-colors duration-200 hover:text-[#E8E4DA]/85"
+          >
+            或复制一盏灯的链接
+          </button>
+        )}
         <span
           aria-live="polite"
           className={`h-4 text-[10px] tracking-[0.3em] text-[#E8E4DA]/45 transition-opacity duration-500 ${

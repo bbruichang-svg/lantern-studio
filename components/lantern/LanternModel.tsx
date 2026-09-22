@@ -6,7 +6,7 @@ import { useFrame } from "@react-three/fiber"
 import { BODY_TOP_Y, RING_CAP_HEIGHT, RING_RADIUS, buildLanternGeometry } from "@/lib/lantern/geometry"
 import { ensureFace } from "@/lib/lantern/faces"
 import { LanternCanvas } from "./LanternCanvas"
-import { computeIdleSway, computeLightingFrame } from "./LanternLighting"
+import { computeIdleSway, computeLightingFrame, LIGHTING_DURATION } from "./LanternLighting"
 import type { FacePreset, LanternColor, LanternPhase } from "@/lib/lantern/types"
 
 type LanternModelProps = {
@@ -184,9 +184,13 @@ export default function LanternModel({ color, face, phase, onCoreClick, paused =
     timeRef.current += dt
 
     // reset the timeline if the user goes back to the studio
-    if (prevPhaseRef.current !== phase) {
+    if (prevPhaseRef.current !== phase || (phase === "finished" && lightTimeRef.current < 0)) {
       if (phase === "studio" || phase === "ready") lightTimeRef.current = -1
       if (phase === "lighting" && lightTimeRef.current < 0) lightTimeRef.current = 0
+      // mounting straight into "finished" (share-link restore) — the lamp
+      // must present its fully-lit state, no timeline replay
+      if (phase === "finished" && lightTimeRef.current < 0)
+        lightTimeRef.current = LIGHTING_DURATION
       prevPhaseRef.current = phase
     }
     const lit = lightTimeRef.current >= 0
