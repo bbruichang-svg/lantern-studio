@@ -155,6 +155,7 @@ export default function MvpPage() {
           lanternCapture: shot,
           songTitle: song.title,
           artist: song.artist,
+          moonLyric: song.moonLyric,
           year: 2026,
         })
         if (cancelled) return
@@ -326,7 +327,7 @@ export default function MvpPage() {
           <div className="pointer-events-none absolute inset-x-0 top-7 z-10 flex justify-center">
             <span className="text-base text-[#E8E4DA]/55">☾</span>
           </div>
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center pb-[6vh] text-center">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center pb-[4vh] text-center">
             {/* the lantern's own light tints the words — UI and lantern share
                 one light source via --lantern-glow (0 unlit → 1 lit) */}
             <p
@@ -335,16 +336,20 @@ export default function MvpPage() {
             >
               今晚，灯亮了。
             </p>
+            {/* the moon line — rises out of the night after the light settles */}
+            <p className="animate-lyric mt-3.5 max-w-[min(80vw,36em)] text-xs font-light leading-relaxed tracking-[0.2em] text-[#E8E4DA]/60">
+              “{song.moonLyric}”
+            </p>
             <p
-              className="mt-7 text-xl font-light tracking-[0.18em]"
+              className="mt-3 text-xl font-light tracking-[0.18em]"
               style={{ textShadow: "0 0 30px rgba(255,216,170,calc(var(--lantern-glow,0)*0.45))" }}
             >
               《{song.title}》
             </p>
-            <p className="mt-2 text-[11px] tracking-[0.3em] text-[#E8E4DA]/50">
-              {song.artist} · {song.note}
+            <p className="mt-1.5 text-[11px] tracking-[0.3em] text-[#E8E4DA]/50">
+              {song.artist}
             </p>
-            <div className="pointer-events-auto mt-9 flex flex-col items-center gap-3.5">
+            <div className="pointer-events-auto mt-6 flex flex-col items-center gap-3">
               <a
                 href={songLink(song)}
                 target="_blank"

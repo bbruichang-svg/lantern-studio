@@ -70,3 +70,28 @@ body {
     animation: wick-flicker 1.9s ease-in-out infinite;
   }
 }
+
+/* moon lyric: after the light settles, the line rises out of the night —
+   slow fade + a small upward drift, like the moon surfacing behind the lantern */
+@keyframes lyric-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-lyric {
+  opacity: 0;
+  animation: lyric-rise 2.6s ease-out 1.4s forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-lyric {
+    animation: none;
+    opacity: 1;
+  }
+}

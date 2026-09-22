@@ -60,11 +60,15 @@ function CaptureBridge({ apiRef }: { apiRef: { current: (() => string) | null } 
  * Pull the camera back on narrow (portrait) viewports so the lantern fits
  * the horizontal frustum — at fov 35 a 390-wide phone would otherwise clip
  * the lantern's sides. Wide/desktop viewports keep the original distance.
+ * Once the lantern is lit, drift back a further ~10% (one-time, smooth) so
+ * the finished-state lyrics get breathing room below the lantern.
  */
-function CameraFit() {
+function CameraFit({ pullBack }: { pullBack: boolean }) {
   const camera = useThree((s) => s.camera)
   const size = useThree((s) => s.size)
   const didFit = useRef(false)
+  const didPull = useRef(false)
+  const pullTarget = useRef<number | null>(null)
 
   useEffect(() => {
     if (didFit.current || size.width === 0) return
@@ -78,6 +82,23 @@ function CameraFit() {
     camera.position.set(0, 0.55, d)
     camera.lookAt(0, 0, 0)
   }, [camera, size])
+
+  useEffect(() => {
+    if (!pullBack || didPull.current) return
+    didPull.current = true
+    const cam = camera as THREE.PerspectiveCamera
+    // one-time gentle dolly-out when the light comes on
+    pullTarget.current = Math.min(cam.position.length() * 1.1, 14)
+  }, [pullBack, camera])
+
+  useFrame(() => {
+    if (pullTarget.current == null) return
+    const cam = camera as THREE.PerspectiveCamera
+    const dist = cam.position.length()
+    const next = dist + (pullTarget.current - dist) * 0.055
+    cam.position.copy(cam.position.clone().normalize().multiplyScalar(next))
+    if (Math.abs(next - pullTarget.current) < 0.01) pullTarget.current = null
+  })
 
   return null
 }
@@ -204,7 +225,7 @@ export default function LanternScene({
       {moon && <MoonDisc lit={lit} />}
 
       <LanternModel color={color} face={face} phase={phase} onCoreClick={onCoreClick} paused={paused} />
-      <CameraFit />
+      <CameraFit pullBack={lit} />
       {captureApiRef && <CaptureBridge apiRef={captureApiRef} />}
 
       <OrbitControls

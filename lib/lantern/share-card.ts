@@ -15,6 +15,8 @@ export type ShareCardOptions = {
   lanternCapture: string
   songTitle: string
   artist: string
+  /** one moon-lit lyric line, printed between the headline and the song credit */
+  moonLyric?: string
   /** shown as 「我的灯笼 · <year>」 (default 2026) */
   year?: number
   /**
@@ -60,8 +62,29 @@ function setLetterSpacing(ctx: CanvasRenderingContext2D, px: number): void {
   if ("letterSpacing" in c) c.letterSpacing = `${px}px`
 }
 
+/** greedy word-wrap for the lyric line (some lines run long) — max 2 rows */
+function wrapLyric(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const rows: string[] = []
+  let row = ""
+  for (const ch of text) {
+    if (ctx.measureText(row + ch).width > maxWidth && row) {
+      rows.push(row)
+      row = ch
+      if (rows.length === 2) break
+    } else {
+      row += ch
+    }
+  }
+  if (row && rows.length < 2) rows.push(row)
+  // ellipsis if the line simply cannot fit in two rows
+  if (rows.length === 2 && rows.join("").length < text.replace(/\s/g, "").length) {
+    rows[1] = rows[1].replace(/.{1}$/, "") + "…"
+  }
+  return rows
+}
+
 export async function renderShareCard(options: ShareCardOptions): Promise<HTMLCanvasElement> {
-  const { lanternCapture, songTitle, artist, year = 2026 } = options
+  const { lanternCapture, songTitle, artist, moonLyric, year = 2026 } = options
   const capture = await loadImage(lanternCapture)
 
   const canvas = document.createElement("canvas")
@@ -123,17 +146,33 @@ export async function renderShareCard(options: ShareCardOptions): Promise<HTMLCa
   setLetterSpacing(ctx, 14)
   ctx.shadowColor = `rgba(${WARM},0.45)`
   ctx.shadowBlur = 26
-  ctx.fillText("今晚，灯亮了。", CARD_WIDTH / 2, CARD_HEIGHT * 0.725)
+  ctx.fillText("今晚，灯亮了。", CARD_WIDTH / 2, CARD_HEIGHT * 0.7)
   ctx.shadowBlur = 0
   setLetterSpacing(ctx, 0)
+
+  // ---- the moon lyric: quiet line between the headline and the song ----
+  let creditY = CARD_HEIGHT * 0.795
+  if (moonLyric) {
+    ctx.font = '300 28px "PingFang SC", "Microsoft YaHei", sans-serif'
+    setLetterSpacing(ctx, 4)
+    const rows = wrapLyric(ctx, moonLyric, CARD_WIDTH * 0.74)
+    ctx.fillStyle = "rgba(232,228,218,0.48)"
+    rows.forEach((row, i) => {
+      const prefix = i === 0 ? "“" : ""
+      const suffix = i === rows.length - 1 ? "”" : ""
+      ctx.fillText(`${prefix}${row}${suffix}`, CARD_WIDTH / 2, CARD_HEIGHT * 0.752 + i * 46)
+    })
+    setLetterSpacing(ctx, 0)
+    creditY = CARD_HEIGHT * 0.752 + rows.length * 46 + 34
+  }
 
   ctx.fillStyle = "rgba(232,228,218,0.55)"
   ctx.font = '300 30px "PingFang SC", "Microsoft YaHei", sans-serif'
   setLetterSpacing(ctx, 6)
-  ctx.fillText(artist, CARD_WIDTH / 2, CARD_HEIGHT * 0.795)
+  ctx.fillText(artist, CARD_WIDTH / 2, creditY)
   ctx.fillStyle = "rgba(232,228,218,0.82)"
   ctx.font = '300 42px "PingFang SC", "Microsoft YaHei", sans-serif'
-  ctx.fillText(`《${songTitle}》`, CARD_WIDTH / 2, CARD_HEIGHT * 0.848)
+  ctx.fillText(`《${songTitle}》`, CARD_WIDTH / 2, creditY + 54)
   setLetterSpacing(ctx, 0)
 
   // ---- quiet footer ----
