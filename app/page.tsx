@@ -76,6 +76,10 @@ export default function MvpPage() {
   const [cardUrl, setCardUrl] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
+  // ---- hold-to-light (blessing stage): press the lantern to charge it ----
+  const [charging, setCharging] = useState(false)
+  const holdTimerRef = useRef<number | null>(null)
+  const holdFiredRef = useRef(false)
 
   // ---- blessing step (PRD F1 写祝福) ----
   const [blessing, setBlessing] = useState("")
@@ -194,6 +198,40 @@ export default function MvpPage() {
     setStage("lighting")
     if (res.trimmed) showToast("本机空间不足，最早的灯将被清理")
   }, [blessing, colorId, face, showToast])
+
+  // ---- hold-to-light: press & hold the lantern ≥900ms to charge it alight.
+  // Release / drag / cancel before the threshold decays the charge. The
+  // button below stays as the keyboard & fallback path.
+  const handleHoldStart = useCallback(() => {
+    if (stage !== "blessing" || !blessing.trim()) return
+    setCharging(true)
+    track("light_hold_started")
+    holdFiredRef.current = false
+    holdTimerRef.current = window.setTimeout(() => {
+      holdTimerRef.current = null
+      holdFiredRef.current = true
+      setCharging(false)
+      track("light_hold_completed", { color: colorId })
+      handleLight()
+    }, 900)
+  }, [stage, blessing, colorId, handleLight])
+
+  const handleHoldCancel = useCallback(() => {
+    setCharging(false)
+    if (holdTimerRef.current !== null) {
+      window.clearTimeout(holdTimerRef.current)
+      holdTimerRef.current = null
+      if (!holdFiredRef.current) track("light_hold_cancelled")
+    }
+  }, [])
+
+  // clear a pending hold if the page goes away mid-charge
+  useEffect(
+    () => () => {
+      if (holdTimerRef.current !== null) window.clearTimeout(holdTimerRef.current)
+    },
+    [],
+  )
 
   useEffect(() => {
     if (stage !== "lighting") return
@@ -379,6 +417,10 @@ export default function MvpPage() {
         onCoreClick={handleCoreClick}
         paused={generating}
         captureApiRef={captureApi}
+        holdEnabled={stage === "blessing" && !!blessing.trim()}
+        charging={charging}
+        onHoldStart={handleHoldStart}
+        onHoldCancel={handleHoldCancel}
       />
 
       {/* ---------------- LANDING ---------------- */}
@@ -537,10 +579,12 @@ export default function MvpPage() {
       )}
 
       {/* ---------------- BLESSING (独立步骤，20 字上限) ---------------- */}
+      {/* container is pointer-transparent so the lantern behind it can be
+          pressed & held (hold-to-light); interactive children opt back in */}
       {stage === "blessing" && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center px-6 pb-[8vh] text-center">
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center px-6 pb-[8vh] text-center">
           <p className="text-[10px] tracking-[0.45em] text-[#E8E4DA]/50">给这盏灯写一句话</p>
-          <div className="mt-6 w-full max-w-sm rounded-2xl border border-white/15 bg-white/[0.08] px-5 py-4 backdrop-blur-md">
+          <div className="pointer-events-auto mt-6 w-full max-w-sm rounded-2xl border border-white/15 bg-white/[0.08] px-5 py-4 backdrop-blur-md">
             <input
               value={blessing}
               maxLength={BLESSING_MAX}
@@ -555,7 +599,7 @@ export default function MvpPage() {
           </div>
 
           {/* 固定示例句 — 点击直接填入 */}
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+          <div className="pointer-events-auto mt-6 flex flex-wrap items-center justify-center gap-2">
             {EXAMPLE_BLESSINGS.map((x) => (
               <button
                 key={x}
@@ -569,7 +613,7 @@ export default function MvpPage() {
           </div>
 
           {/* 本地灵感库（随包内置、零网络请求） */}
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+          <div className="pointer-events-auto mt-3 flex flex-wrap items-center justify-center gap-2">
             {inspiration.map((x) => (
               <button
                 key={x}
@@ -593,13 +637,17 @@ export default function MvpPage() {
             type="button"
             onClick={handleLight}
             disabled={!blessing.trim()}
-            className="mt-9 rounded-full bg-[#E8E4DA] px-12 py-3.5 text-sm tracking-[0.5em] text-[#0B1220] transition-all duration-300 hover:bg-white disabled:opacity-35"
+            className="pointer-events-auto mt-9 rounded-full bg-[#E8E4DA] px-12 py-3.5 text-sm tracking-[0.5em] text-[#0B1220] transition-all duration-300 hover:bg-white disabled:opacity-35"
           >
             点亮这盏灯
           </button>
-          {!blessing.trim() && (
+          {!blessing.trim() ? (
             <p className="mt-3 text-[10px] tracking-[0.25em] text-[#E8E4DA]/40">
               写一句祝福，或从上方灵感中挑一句
+            </p>
+          ) : (
+            <p className="mt-3 text-[10px] tracking-[0.25em] text-[#E8E4DA]/40">
+              按住灯笼，为它蓄光
             </p>
           )}
           <button
@@ -608,7 +656,7 @@ export default function MvpPage() {
               setMode("color")
               setStage("make")
             }}
-            className="mt-4 text-[10px] tracking-[0.3em] text-[#E8E4DA]/40 transition-colors duration-200 hover:text-[#E8E4DA]/75"
+            className="pointer-events-auto mt-4 text-[10px] tracking-[0.3em] text-[#E8E4DA]/40 transition-colors duration-200 hover:text-[#E8E4DA]/75"
           >
             ‹ 返回修改灯笼
           </button>

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import * as THREE from "three"
-import { useFrame } from "@react-three/fiber"
+import { useFrame, type ThreeEvent } from "@react-three/fiber"
 import { BODY_TOP_Y, RING_CAP_HEIGHT, RING_RADIUS, buildLanternGeometry } from "@/lib/lantern/geometry"
 import { ensureFace } from "@/lib/lantern/faces"
 import { LanternCanvas } from "./LanternCanvas"
@@ -16,6 +16,14 @@ type LanternModelProps = {
   onCoreClick: () => void
   /** freeze all animation (sway timeline stops) — used while capturing the share card */
   paused?: boolean
+  /** blessing stage with a blessing written — pressing the lantern charges it */
+  holdEnabled?: boolean
+  /** true while the user is holding the lantern down (charge feedback) */
+  charging?: boolean
+  /** pointerdown on the lantern body while holdEnabled */
+  onHoldStart?: (x: number, y: number) => void
+  /** hold released / moved / cancelled before firing */
+  onHoldCancel?: () => void
 }
 
 const RING_COLOR = "#24201D"
@@ -46,7 +54,17 @@ function makeBloomTexture(): THREE.CanvasTexture {
   return tex
 }
 
-export default function LanternModel({ color, face, phase, onCoreClick, paused = false }: LanternModelProps) {
+export default function LanternModel({
+  color,
+  face,
+  phase,
+  onCoreClick,
+  paused = false,
+  holdEnabled = false,
+  charging = false,
+  onHoldStart,
+  onHoldCancel,
+}: LanternModelProps) {
   const lanternTexture = useMemo(() => new LanternCanvas(), [])
   const geometry = useMemo(() => buildLanternGeometry(), [])
   const bloomTexture = useMemo(() => makeBloomTexture(), [])
@@ -75,6 +93,13 @@ export default function LanternModel({ color, face, phase, onCoreClick, paused =
   // breathing crossfade: 0 during the lighting timeline, ramps to 1 over
   // ~2s once the timeline completes, modulating the steady-state light
   const breathBlendRef = useRef(0)
+  // hold-to-light charge: 0..1, lerped toward the charging target each frame
+  // (rise ~0.45s / decay ~0.6s), blended into the light channels at ≤35% peak
+  const chargeRef = useRef(0)
+  // window-level pointer tracking for an in-progress hold (moved → orbit,
+  // not a charge; up/cancel → released). Cleaned up on unmount.
+  const holdDownPos = useRef<{ x: number; y: number } | null>(null)
+  const cleanupHold = useRef<(() => void) | null>(null)
 
   const targetBase = useMemo(() => new THREE.Color(color.base), [color.base])
   const targetGlow = useMemo(() => new THREE.Color(color.glow), [color.glow])
@@ -215,12 +240,20 @@ export default function LanternModel({ color, face, phase, onCoreClick, paused =
     const lightGust = 1 - 0.1 * gust.strength * flickerNoise
     const lightMod = breath * (over >= 0 ? computeIgnitionSwell(over) : 1) * lightGust
 
+    // hold-to-light charge (blessing stage): the paper picks up a faint glow
+    // while the user holds the lantern down — a promise of light, never the
+    // light itself (≤35% of each channel's full-lit level), with a soft
+    // wick-like flicker on top
+    const chargeTarget = charging ? 1 : 0
+    chargeRef.current += (chargeTarget - chargeRef.current) * Math.min(1, dt * 4.5)
+    const charge = chargeRef.current * (0.94 + 0.06 * Math.sin(timeRef.current * 6.8))
+
     // UI illumination bridge: expose the lantern's light level to the DOM
     // as --lantern-glow so on-screen text is "lit by the lantern" — the UI
     // and the lantern share a single light source. translucent leads (0.4s),
     // glow completes the bloom (2.2s); max() gives a smooth 0→1.
     if (typeof document !== "undefined") {
-      const g = frame ? Math.max(frame.translucent, frame.glow) * lightMod : 0
+      const g = frame ? Math.max(frame.translucent, frame.glow) * lightMod : charge * 0.35
       if (Math.abs(g - uiGlowRef.current) > 0.008) {
         uiGlowRef.current = g
         document.documentElement.style.setProperty("--lantern-glow", g.toFixed(3))
@@ -246,23 +279,25 @@ export default function LanternModel({ color, face, phase, onCoreClick, paused =
       if (coreLight.current) coreLight.current.getWorldPosition(worldPosTmp)
       transUniforms.current.uTransLightPos.value.copy(worldPosTmp)
       transUniforms.current.uTransColor.value.lerp(transTarget, k)
-      transUniforms.current.uTransIntensity.value = frame ? frame.translucent * TRANSLUCENT_PEAK * lightMod : 0
+      transUniforms.current.uTransIntensity.value = frame
+        ? frame.translucent * TRANSLUCENT_PEAK * lightMod
+        : charge * TRANSLUCENT_PEAK * 0.35
     }
     if (coreLight.current) {
       coreLight.current.color.lerp(lightTarget, k)
-      coreLight.current.intensity = frame ? frame.pointIntensity * lightMod : 0
+      coreLight.current.intensity = frame ? frame.pointIntensity * lightMod : charge * 0.9
     }
     if (glowMaterial.current) {
       glowMaterial.current.color.lerp(haloTarget, k)
-      glowMaterial.current.opacity = frame ? frame.glow * 0.09 * lightMod : 0
+      glowMaterial.current.opacity = frame ? frame.glow * 0.09 * lightMod : charge * 0.35 * 0.09
     }
     if (bloomMaterial.current) {
       bloomMaterial.current.color.lerp(haloTarget, k)
-      bloomMaterial.current.opacity = frame ? frame.glow * 0.12 * lightMod : 0
+      bloomMaterial.current.opacity = frame ? frame.glow * 0.12 * lightMod : charge * 0.35 * 0.12
     }
     if (coreBulb.current) {
       coreBulb.current.color.lerp(targetGlow, k)
-      coreBulb.current.opacity = frame ? 0.05 + frame.core * 0.95 * lightMod : 0.05
+      coreBulb.current.opacity = frame ? 0.05 + frame.core * 0.95 * lightMod : 0.05 + charge * 0.3
     }
     if (sparkMesh.current && sparkMaterial.current) {
       const s = frame ? frame.spark : 0
@@ -273,6 +308,45 @@ export default function LanternModel({ color, face, phase, onCoreClick, paused =
   })
 
   const coreInteractive = phase === "ready"
+
+  // ---- hold-to-light (blessing stage) -------------------------------------
+  const endHoldListeners = useCallback(() => {
+    cleanupHold.current?.()
+    cleanupHold.current = null
+    holdDownPos.current = null
+  }, [])
+
+  useEffect(() => endHoldListeners, [endHoldListeners])
+
+  const beginHold = useCallback(
+    (e: ThreeEvent<PointerEvent>) => {
+      if (!holdEnabled) return
+      e.stopPropagation()
+      holdDownPos.current = { x: e.clientX, y: e.clientY }
+      onHoldStart?.(e.clientX, e.clientY)
+      const onMove = (ev: PointerEvent) => {
+        const down = holdDownPos.current
+        // moved beyond a small threshold → this is an orbit drag, not a hold
+        if (down && Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > 10) {
+          onHoldCancel?.()
+          endHoldListeners()
+        }
+      }
+      const onRelease = () => {
+        onHoldCancel?.()
+        endHoldListeners()
+      }
+      window.addEventListener("pointermove", onMove)
+      window.addEventListener("pointerup", onRelease)
+      window.addEventListener("pointercancel", onRelease)
+      cleanupHold.current = () => {
+        window.removeEventListener("pointermove", onMove)
+        window.removeEventListener("pointerup", onRelease)
+        window.removeEventListener("pointercancel", onRelease)
+      }
+    },
+    [holdEnabled, onHoldStart, onHoldCancel, endHoldListeners],
+  )
 
   return (
     <group>
@@ -387,6 +461,16 @@ export default function LanternModel({ color, face, phase, onCoreClick, paused =
               <sphereGeometry args={[0.3, 12, 10]} />
             </mesh>
           </group>
+
+          {/* hold-to-light hit target — the whole lantern body (blessing
+              stage). A fully transparent material (not visible={false}) so
+              the raycaster reliably hits it; additive-free, costs nothing. */}
+          {holdEnabled && (
+            <mesh onPointerDown={beginHold}>
+              <sphereGeometry args={[1.05, 16, 12]} />
+              <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
+            </mesh>
+          )}
         </group>
       </group>
     </group>

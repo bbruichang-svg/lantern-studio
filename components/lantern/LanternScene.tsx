@@ -22,6 +22,12 @@ type LanternSceneProps = {
   paused?: boolean
   /** filled with a capture() function that returns the WebGL canvas as a PNG data URL */
   captureApiRef?: { current: (() => string) | null }
+  /** blessing stage with a blessing written — pressing the lantern charges it */
+  holdEnabled?: boolean
+  /** true while the user is holding the lantern down */
+  charging?: boolean
+  onHoldStart?: (x: number, y: number) => void
+  onHoldCancel?: () => void
 }
 
 /** registers a synchronous canvas-capture function for the share card */
@@ -205,6 +211,10 @@ export default function LanternScene({
   moon,
   paused,
   captureApiRef,
+  holdEnabled,
+  charging,
+  onHoldStart,
+  onHoldCancel,
 }: LanternSceneProps) {
   const resolvedEnv: "studio" | "nightDim" | "nightLit" =
     env ?? (phase === "studio" || phase === "ready" ? "studio" : "nightLit")
@@ -232,7 +242,17 @@ export default function LanternScene({
       <EnvironmentLights env={resolvedEnv} />
       {moon && <MoonDisc lit={lit} />}
 
-      <LanternModel color={color} face={face} phase={phase} onCoreClick={onCoreClick} paused={paused} />
+      <LanternModel
+        color={color}
+        face={face}
+        phase={phase}
+        onCoreClick={onCoreClick}
+        paused={paused}
+        holdEnabled={holdEnabled}
+        charging={charging}
+        onHoldStart={onHoldStart}
+        onHoldCancel={onHoldCancel}
+      />
       {/* steady state — warm motes rising from the top opening */}
       <EmberRise active={phase === "finished"} tint={emberTint} paused={paused} />
       {/* the night sky answers: stars wake near→far once the lantern is lit */}
