@@ -24,8 +24,8 @@ const LanternScene = dynamic(() => import("@/components/lantern/LanternScene"), 
   loading: () => <div className="absolute inset-0" aria-hidden="true" />,
 })
 
-/** apex stillness before the blessing surfaces (memory) */
-const MEMORY_DELAY_MS = 1500
+/** apex stillness before the light merges into the moon (dissolve) */
+const APEX_HOLD_MS = 2000
 /** hold ≥ this many ms on release = charged enough to fly */
 const HOLD_THRESHOLD_MS = 700
 
@@ -99,7 +99,7 @@ export default function ReleasePage() {
   // soar uses "lighting" so the paper ignites while it lifts off the ground
   // (ignition and take-off are the same moment), then holds at full glow.
   const phase: LanternPhase =
-    stage === "apex" || stage === "memory" || stage === "share"
+    stage === "apex" || stage === "dissolve" || stage === "memory" || stage === "share"
       ? "finished"
       : stage === "soar"
         ? "lighting"
@@ -169,15 +169,21 @@ export default function ReleasePage() {
     track("release_soar_complete", { color: colorId })
   }, [colorId])
 
-  // apex → memory (blessing surfaces after a still beat)
+  // apex → dissolve: a still beat at the moon-framed apex, then the lantern's
+  // light swells and merges into the moon (化月, 方案 §10)
   useEffect(() => {
     if (stage !== "apex") return
     const t = window.setTimeout(() => {
-      setStage("memory")
-      track("release_memory")
-    }, MEMORY_DELAY_MS)
+      setStage("dissolve")
+    }, APEX_HOLD_MS)
     return () => window.clearTimeout(t)
   }, [stage])
+
+  const handleDissolveComplete = useCallback(() => {
+    setStage("memory")
+    track("release_dissolve_complete")
+    track("release_memory")
+  }, [])
 
   // ---- share card ----
   const openShare = useCallback(() => {
@@ -204,6 +210,8 @@ export default function ReleasePage() {
           songTitle: song.title,
           artist: song.artist,
           moonLyric: song.moonLyric,
+          blessing: blessing.trim(),
+          lanternNo: formatNumber(litNo),
           year: 2026,
         })
         if (cancelled) return
@@ -219,7 +227,7 @@ export default function ReleasePage() {
       cancelled = true
       window.clearTimeout(t)
     }
-  }, [stage, song])
+  }, [stage, song, blessing, litNo])
 
   const showFeedback = useCallback((text: string) => {
     setFeedback(text)
@@ -332,6 +340,7 @@ export default function ReleasePage() {
         onHoldCancel={handleHoldCancel}
         releaseStage={stage}
         onSoarComplete={handleSoarComplete}
+        onDissolveComplete={handleDissolveComplete}
       />
 
       {/* ---------------- ARRIVE ---------------- */}

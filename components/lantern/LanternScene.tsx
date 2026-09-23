@@ -8,6 +8,7 @@ import LanternModel from "./LanternModel"
 import EmberRise from "./EmberRise"
 import AwakenedStars from "./AwakenedStars"
 import ReleaseGround from "./ReleaseGround"
+import ReleaseReflection from "./ReleaseReflection"
 import SoarController, { APEX_Y } from "./SoarController"
 import type { FacePreset, LanternColor, LanternPhase, ReleaseStage } from "@/lib/lantern/types"
 
@@ -38,6 +39,8 @@ type LanternSceneProps = {
   releaseStage?: ReleaseStage
   /** fired once when the soar timeline finishes (soar → apex) */
   onSoarComplete?: () => void
+  /** fired once when the dissolve merge finishes (dissolve → memory) */
+  onDissolveComplete?: () => void
 }
 
 /** registers a synchronous canvas-capture function for the share card */
@@ -190,33 +193,143 @@ function makeMoonTexture(): THREE.CanvasTexture {
   return tex
 }
 
-/** ambient moon — atmosphere only, never the hero (≤5% visual weight) */
-function MoonDisc({ lit }: { lit: boolean }) {
+/** ambient moon — atmosphere by default; during the dissolve merge it is
+ * the destination the lantern's light flows into (boost 0→1, written by
+ * DissolveController through moonBoostRef) */
+function MoonDisc({ lit, boostRef }: { lit: boolean; boostRef?: { current: number } }) {
   const texture = useMemo(() => makeMoonTexture(), [])
   const group = useRef<THREE.Group>(null)
   const material = useRef<THREE.SpriteMaterial>(null)
 
   useFrame((_, delta) => {
     const k = 1 - Math.exp(-1.6 * Math.min(delta, 0.05))
+    const boost = boostRef?.current ?? 0
     if (material.current) {
-      // narrative: the moon only reveals itself once the lantern is lit
-      const o = lit ? 0.38 : 0
+      // narrative: the moon only reveals itself once the lantern is lit;
+      // the dissolve boost pushes it from ambience to hero brightness
+      const o = lit ? Math.min(0.92, 0.38 + boost * 0.54) : 0
       material.current.opacity += (o - material.current.opacity) * k
     }
     if (group.current) {
-      // drifts slightly higher & closer once the lantern is lit
-      const y = lit ? 2.62 : 2.3
-      group.current.position.y += (y - group.current.position.y) * k
+      // drifts slightly higher & closer once the lantern is lit; during the
+      // merge the moon leans IN — closer, larger, near upper-centre — to meet
+      // the lantern's light halfway. The end point must sit INSIDE the
+      // portrait frustum (±~1.1 world units at that depth), or the merged
+      // moon lands off-screen and the whole beat is wasted.
+      const x = -3.5 + 2.5 * boost
+      const y = (lit ? 2.62 : 2.3) + boost * 0.1
+      const z = -5.5 + 3.4 * boost
+      group.current.position.setX(group.current.position.x + (x - group.current.position.x) * k)
+      group.current.position.setY(group.current.position.y + (y - group.current.position.y) * k)
+      group.current.position.setZ(group.current.position.z + (z - group.current.position.z) * k)
+      const s = 1 + boost * 0.6
+      group.current.scale.setScalar(group.current.scale.x + (s - group.current.scale.x) * k)
+      // dev probe: playwright reads this to debug the merge beat
+      if (process.env.NODE_ENV !== "production") {
+        ;(window as unknown as { __moon?: Record<string, unknown> }).__moon = {
+          pos: group.current.position.toArray(),
+          scale: group.current.scale.x,
+          opacity: material.current?.opacity,
+          boost,
+          visible: group.current.visible,
+        }
+      }
     }
   })
 
   return (
     <group ref={group} position={[-3.5, 2.3, -5.5]}>
       <sprite scale={[1.5, 1.5, 1]}>
-        <spriteMaterial map={texture} transparent opacity={0} depthWrite={false} />
+        <spriteMaterial ref={material} map={texture} transparent opacity={0} depthWrite={false} />
       </sprite>
     </group>
   )
+}
+
+/** dissolve merge duration (s): lantern light → moon */
+const DISSOLVE_DURATION_S = 2.8
+
+/**
+ * 化月 morph (方案 §10): at apex the lantern's glow swells, the paper shrinks
+ * into its own light, and the light drifts toward the moon as the moon
+ * brightens to meet it — two lights merging into one. No geometry morph:
+ * scale + additive glow sprite + moon boost sell the transition.
+ * The "share" stage quietly restores the lantern (behind the full-screen
+ * share overlay) so the card capture still frames the lamp.
+ */
+function DissolveController({
+  stage,
+  groupRef,
+  glowRef,
+  moonBoostRef,
+  onComplete,
+}: {
+  stage: ReleaseStage
+  groupRef: React.RefObject<THREE.Group | null>
+  glowRef: React.RefObject<THREE.Sprite | null>
+  moonBoostRef: { current: number }
+  onComplete: () => void
+}) {
+  const elapsed = useRef(0)
+  const fired = useRef(false)
+
+  useEffect(() => {
+    if (stage === "dissolve") {
+      elapsed.current = 0
+      fired.current = false
+    } else if (stage === "memory") {
+      // merged state — lantern stays gone, moon stays bright (boost holds 1)
+      const g = groupRef.current
+      if (g) g.visible = false
+      const glow = glowRef.current
+      if (glow) glow.visible = false
+    } else if (stage === "share") {
+      // restore the lamp behind the share overlay for the card capture
+      const g = groupRef.current
+      if (g) {
+        g.visible = true
+        g.scale.setScalar(1)
+      }
+      moonBoostRef.current = 0
+      const glow = glowRef.current
+      if (glow) glow.visible = false
+    }
+  }, [stage, groupRef, glowRef, moonBoostRef])
+
+  useFrame((_, delta) => {
+    if (stage !== "dissolve") return
+    elapsed.current = Math.min(elapsed.current + Math.min(delta, 0.05), DISSOLVE_DURATION_S)
+    const e = elapsed.current / DISSOLVE_DURATION_S
+    const s = THREE.MathUtils.smoothstep(e, 0, 1)
+
+    const g = groupRef.current
+    if (g) {
+      g.visible = true
+      g.scale.setScalar(1 - 0.85 * s)
+    }
+
+    const glow = glowRef.current
+    if (glow) {
+      glow.visible = true
+      // drift toward the moon's merge point (moon ends near [-1.0, 2.7, -2.1])
+      glow.position.set(-1.05 * s, APEX_Y + (2.72 - APEX_Y) * 0.5 * s, -2.1 * s)
+      const sc = 0.5 + 2.3 * s
+      glow.scale.set(sc, sc, 1)
+      const mat = glow.material as THREE.SpriteMaterial
+      // swell … then hand the light over to the moon in the last stretch
+      mat.opacity = s < 0.72 ? Math.min(1, s * 1.5) * 0.9 : 0.9 * (1 - (s - 0.72) / 0.28)
+    }
+
+    moonBoostRef.current = s
+
+    if (e >= 1 && !fired.current) {
+      fired.current = true
+      if (g) g.visible = false
+      onComplete()
+    }
+  })
+
+  return null
 }
 
 export default function LanternScene({
@@ -234,6 +347,7 @@ export default function LanternScene({
   onHoldCancel,
   releaseStage,
   onSoarComplete,
+  onDissolveComplete,
 }: LanternSceneProps) {
   const resolvedEnv: "studio" | "nightDim" | "nightLit" =
     env ?? (phase === "studio" || phase === "ready" ? "studio" : "nightLit")
@@ -247,6 +361,15 @@ export default function LanternScene({
   // release-route extras — inert on every other route
   const lanternGroup = useRef<THREE.Group>(null)
   const soarProgress = useRef(0)
+  // dissolve merge: moon brightness boost (written by DissolveController,
+  // read by MoonDisc every frame) + the lantern's own light sprite
+  const moonBoostRef = useRef(0)
+  const dissolveGlowRef = useRef<THREE.Sprite>(null)
+  const dissolveGlowTex = useMemo(() => makeMoonTexture(), [])
+  const dissolveGlowColor = useMemo(
+    () => new THREE.Color(color.glow).lerp(new THREE.Color("#FFF3DC"), 0.45),
+    [color.glow],
+  )
 
   return (
     <Canvas
@@ -262,8 +385,24 @@ export default function LanternScene({
       }}
     >
       <EnvironmentLights env={resolvedEnv} />
-      {moon && <MoonDisc lit={lit} />}
+      {moon && <MoonDisc lit={lit} boostRef={releaseStage ? moonBoostRef : undefined} />}
       {releaseStage && <ReleaseGround soarProgress={soarProgress} lit={lit} />}
+      {releaseStage && (
+        <ReleaseReflection soarProgress={soarProgress} lit={lit} glow={color.glow} />
+      )}
+      {/* the lantern's light, set free during the dissolve merge */}
+      {releaseStage && (
+        <sprite ref={dissolveGlowRef} position={[0, APEX_Y, 0]} scale={[0.5, 0.5, 1]} visible={false}>
+          <spriteMaterial
+            map={dissolveGlowTex}
+            color={dissolveGlowColor}
+            transparent
+            opacity={0}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </sprite>
+      )}
 
       <group ref={lanternGroup}>
         <LanternModel
@@ -284,6 +423,15 @@ export default function LanternScene({
           groupRef={lanternGroup}
           progressRef={soarProgress}
           onSoarComplete={onSoarComplete}
+        />
+      )}
+      {releaseStage && (
+        <DissolveController
+          stage={releaseStage}
+          groupRef={lanternGroup}
+          glowRef={dissolveGlowRef}
+          moonBoostRef={moonBoostRef}
+          onComplete={onDissolveComplete ?? (() => {})}
         />
       )}
       {/* steady state — warm motes rising from the top opening */}

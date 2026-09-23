@@ -89,7 +89,7 @@ export default function SoarController({
         fired.current = true
         onSoarComplete?.()
       }
-    } else if (stage === "apex" || stage === "memory" || stage === "share") {
+    } else if (stage === "apex" || stage === "dissolve" || stage === "memory" || stage === "share") {
       // snapped states (share-link restore lands straight on apex): hold still
       if (progressRef.current < 1) {
         progressRef.current = 1

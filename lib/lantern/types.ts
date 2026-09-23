@@ -41,7 +41,8 @@ export type MvpStage =
  * soar; lighting & finished are folded into the charge→release moment.
  * arrive: idle grounded lantern · wish: write a blessing · charge: hold to
  * charge (chargeRef drives the glow) · soar: rising · apex: high & still,
- * moon-framed · memory: blessing surfaces · share: card/link.
+ * moon-framed · dissolve: the lantern's light merges into the moon ·
+ * memory: blessing surfaces under the moon · share: card/link.
  */
 export type ReleaseStage =
   | "arrive"
@@ -49,5 +50,6 @@ export type ReleaseStage =
   | "charge"
   | "soar"
   | "apex"
+  | "dissolve"
   | "memory"
   | "share"

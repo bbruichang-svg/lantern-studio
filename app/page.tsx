@@ -334,6 +334,8 @@ export default function MvpPage() {
           songTitle: song.title,
           artist: song.artist,
           moonLyric: song.moonLyric,
+          blessing: blessing.trim(),
+          lanternNo: formatNumber(litNo),
           year: 2026,
         })
         if (cancelled) return
@@ -349,7 +351,7 @@ export default function MvpPage() {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [stage, song])
+  }, [stage, song, blessing, litNo])
 
   const showFeedback = useCallback((text: string) => {
     setFeedback(text)
