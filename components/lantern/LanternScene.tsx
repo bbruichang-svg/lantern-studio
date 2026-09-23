@@ -7,8 +7,6 @@ import { OrbitControls } from "@react-three/drei"
 import LanternModel from "./LanternModel"
 import EmberRise from "./EmberRise"
 import AwakenedStars from "./AwakenedStars"
-import LyricRing from "./LyricRing"
-import NightWater from "./NightWater"
 import type { FacePreset, LanternColor, LanternPhase } from "@/lib/lantern/types"
 
 type LanternSceneProps = {
@@ -22,8 +20,6 @@ type LanternSceneProps = {
   moon?: boolean
   /** freeze animation (share-card capture) */
   paused?: boolean
-  /** 走马灯词环 content — the moon lyric circling the lantern; null → no ring */
-  ringText?: string | null
   /** filled with a capture() function that returns the WebGL canvas as a PNG data URL */
   captureApiRef?: { current: (() => string) | null }
 }
@@ -209,7 +205,6 @@ export default function LanternScene({
   moon,
   paused,
   captureApiRef,
-  ringText,
 }: LanternSceneProps) {
   const resolvedEnv: "studio" | "nightDim" | "nightLit" =
     env ?? (phase === "studio" || phase === "ready" ? "studio" : "nightLit")
@@ -238,12 +233,8 @@ export default function LanternScene({
       {moon && <MoonDisc lit={lit} />}
 
       <LanternModel color={color} face={face} phase={phase} onCoreClick={onCoreClick} paused={paused} />
-      {/* 水灯叙事 — the night sea takes the light as ripples + reflection */}
-      <NightWater active={lit} tint={emberTint} paused={paused} />
       {/* steady state — warm motes rising from the top opening */}
       <EmberRise active={phase === "finished"} tint={emberTint} paused={paused} />
-      {/* 走马灯词环 — the moon lyric revolves around the lantern */}
-      <LyricRing active={phase === "finished"} text={ringText ?? null} paused={paused} />
       {/* the night sky answers: stars wake near→far once the lantern is lit */}
       <AwakenedStars active={lit} paused={paused} />
       <CameraFit pullBack={lit} />
