@@ -6,6 +6,8 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber"
 import { OrbitControls } from "@react-three/drei"
 import LanternModel from "./LanternModel"
 import SparkBurst from "./SparkBurst"
+import EmberRise from "./EmberRise"
+import AwakenedStars from "./AwakenedStars"
 import type { FacePreset, LanternColor, LanternPhase } from "@/lib/lantern/types"
 
 type LanternSceneProps = {
@@ -208,6 +210,12 @@ export default function LanternScene({
   const resolvedEnv: "studio" | "nightDim" | "nightLit" =
     env ?? (phase === "studio" || phase === "ready" ? "studio" : "nightLit")
   const lit = phase === "lighting" || phase === "finished"
+  // ember colour grows out of the lantern's own glow — each city colour
+  // gets its own warm motes (never a generic palette)
+  const emberTint = useMemo(
+    () => new THREE.Color(color.glow).lerp(new THREE.Color("#FFD9A6"), 0.6),
+    [color.glow],
+  )
 
   return (
     <Canvas
@@ -226,8 +234,12 @@ export default function LanternScene({
       {moon && <MoonDisc lit={lit} />}
 
       <LanternModel color={color} face={face} phase={phase} onCoreClick={onCoreClick} paused={paused} />
-      {/* sparkler burn — ignites once the lighting timeline completes */}
+      {/* ignition burst — one-shot, fades after ~4s */}
       <SparkBurst active={phase === "finished"} paused={paused} />
+      {/* steady state — warm motes rising from the top opening */}
+      <EmberRise active={phase === "finished"} tint={emberTint} paused={paused} />
+      {/* the night sky answers: stars wake near→far once the lantern is lit */}
+      <AwakenedStars active={lit} paused={paused} />
       <CameraFit pullBack={lit} />
       {captureApiRef && <CaptureBridge apiRef={captureApiRef} />}
 

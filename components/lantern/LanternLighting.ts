@@ -46,6 +46,15 @@ export function computeLightingFrame(t: number): LightingFrame {
 
 export type IdleFrame = { rotX: number; rotZ: number }
 
+/**
+ * Steady-state breathing — a dual-frequency swell layered on the fully-lit
+ * look once the lighting timeline completes. Two incommensurate periods so
+ * the rhythm never feels mechanical. Range ≈ 0.91..1.09.
+ */
+export function computeBreath(t: number): number {
+  return 1 + 0.06 * Math.sin((t * Math.PI * 2) / 5.2) + 0.03 * Math.sin((t * Math.PI * 2) / 2.3 + 1.7)
+}
+
 /** almost imperceptible hanging-in-air sway, 4–7s periods, ±2–4° max */
 export function computeIdleSway(time: number, boost: number): IdleFrame {
   return {

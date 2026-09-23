@@ -18,7 +18,8 @@ type SparkBurstProps = {
  *    under gravity and fade (LineSegments pool, additive blending)
  *  - a handful of "faller" rays arc down past the lantern; when a tip
  *    crosses the ground plane it fades into a soft ripple ring there
- *  - four-point stars twinkle in a shell around the burst
+ *  - four-point stars live in AwakenedStars (see that file); this burst
+ *    is a one-shot ignition that fades after ~4s
  *  - a small bright core marks the emission point
  *
  * Everything is driven by useFrame against mutable pools — nothing enters
@@ -33,10 +34,12 @@ const GROUND_Y = -(BODY_TOP_Y + RING_CAP_HEIGHT + 0.45)
 const RAY_COUNT = 64 // pool size
 const RAY_SEG = 7 // line segments per ray
 const BURST_ON_ACTIVATE = 32
-const SPAWN_RATE = 22 // sustained rays / second
+const SPAWN_RATE = 22 // rays / second during the ignition window
+/** the burst is a one-shot ignition: spawning stops after this window and
+ * the pool dies out naturally (~4s), handing over to the breathing state */
+const SPAWN_WINDOW = 1.2
 const RIPPLE_COUNT = 7
 const RIPPLE_LIFE = 1.4
-const STAR_COUNT = 20
 
 // saturated bases — ACES tonemapping washes additive lines toward white,
 // so the hue must be strong pre-tonemap to read as pastel on screen
@@ -64,35 +67,6 @@ type Ray = {
   alive: boolean
 }
 
-function makeStarTexture(): THREE.CanvasTexture {
-  const c = document.createElement("canvas")
-  c.width = 64
-  c.height = 64
-  const ctx = c.getContext("2d")
-  if (ctx) {
-    // four-point sparkle: concave diamond cross
-    const star = () => {
-      ctx.beginPath()
-      ctx.moveTo(32, 3)
-      ctx.quadraticCurveTo(36, 28, 61, 32)
-      ctx.quadraticCurveTo(36, 36, 32, 61)
-      ctx.quadraticCurveTo(28, 36, 3, 32)
-      ctx.quadraticCurveTo(28, 28, 32, 3)
-      ctx.fill()
-    }
-    ctx.shadowColor = "rgba(255,255,255,0.9)"
-    ctx.shadowBlur = 6
-    ctx.fillStyle = "rgba(255,255,255,0.95)"
-    star()
-    ctx.shadowBlur = 0
-    ctx.fillStyle = "rgba(255,255,255,0.55)"
-    star()
-  }
-  const tex = new THREE.CanvasTexture(c)
-  tex.colorSpace = THREE.SRGBColorSpace
-  return tex
-}
-
 function makeCoreTexture(): THREE.CanvasTexture {
   const c = document.createElement("canvas")
   c.width = 128
@@ -113,7 +87,6 @@ function makeCoreTexture(): THREE.CanvasTexture {
 }
 
 export default function SparkBurst({ active, paused = false }: SparkBurstProps) {
-  const starTexture = useMemo(() => makeStarTexture(), [])
   const coreTexture = useMemo(() => makeCoreTexture(), [])
 
   // ---- ray pool (one LineSegments draw call) ------------------------------
@@ -145,9 +118,9 @@ export default function SparkBurst({ active, paused = false }: SparkBurstProps) 
   )
   const freeRays = useRef<number[]>([])
   const spawnAcc = useRef(0)
+  const burnAge = useRef(0)
   const wasActive = useRef(false)
   const globalRef = useRef(0)
-  const starClock = useRef(0)
 
   // ---- ripple pool ---------------------------------------------------------
   const rippleRefs = useRef<(THREE.Mesh | null)[]>([])
@@ -165,29 +138,6 @@ export default function SparkBurst({ active, paused = false }: SparkBurstProps) 
     rippleState[i].x = THREE.MathUtils.clamp(x, -2.6, 2.6)
     rippleState[i].z = THREE.MathUtils.clamp(z, -2.6, 2.6)
   }
-
-  // ---- star pool -----------------------------------------------------------
-  const starRefs = useRef<(THREE.Sprite | null)[]>([])
-  const starMats = useRef<(THREE.SpriteMaterial | null)[]>([])
-  const stars = useMemo(
-    () =>
-      Array.from({ length: STAR_COUNT }, () => {
-        // scattered shell around & above the burst
-        const az = Math.random() * Math.PI * 2
-        const el = Math.random() * Math.PI * 0.55
-        const r = 1.5 + Math.random() * 2.1
-        return {
-          x: Math.cos(el) * Math.sin(az) * r,
-          y: ORIGIN_Y + Math.sin(el) * r * 0.9,
-          z: Math.cos(el) * Math.cos(az) * r * 0.6 - 0.4,
-          period: 1.6 + Math.random() * 2.6,
-          offset: Math.random(),
-          maxO: 0.35 + Math.random() * 0.5,
-          scale: 0.05 + Math.random() * 0.09,
-        }
-      }),
-    [],
-  )
 
   const groupRef = useRef<THREE.Group>(null)
   const coreMat = useRef<THREE.SpriteMaterial>(null)
@@ -213,15 +163,13 @@ export default function SparkBurst({ active, paused = false }: SparkBurstProps) 
   useEffect(() => {
     return () => {
       rayGeo.dispose()
-      starTexture.dispose()
       coreTexture.dispose()
     }
-  }, [rayGeo, starTexture, coreTexture])
+  }, [rayGeo, coreTexture])
 
   useFrame((_, delta) => {
     if (paused) return // frozen for share-card capture
     const dt = Math.min(delta, 0.05)
-    starClock.current += dt
 
     // global fade-in / fade-out
     const target = active ? 1 : 0
@@ -236,22 +184,26 @@ export default function SparkBurst({ active, paused = false }: SparkBurstProps) 
       for (const s of rippleState) s.age = -1
     }
     if (active && !wasActive.current) {
-      // ignition: one big pop, then continuous burn
+      // ignition: one big pop, brief spray, then the burn hands over to the
+      // breathing state and the pool dies out naturally
       wasActive.current = true
+      burnAge.current = 0
+      spawnAcc.current = 0
       freeRays.current = rays.map((_, i) => i)
       for (let n = 0; n < BURST_ON_ACTIVATE && freeRays.current.length > 0; n++) {
         initRay(rays[freeRays.current.pop() as number], Math.random() < 0.22)
       }
       spawnRipple((Math.random() - 0.5) * 2.4, (Math.random() - 0.5) * 2)
     }
+    if (active) burnAge.current += dt
 
     const positions = rayGeo.attributes.position as THREE.BufferAttribute
     const colors = rayGeo.attributes.color as THREE.BufferAttribute
     const posArr = positions.array as Float32Array
     const colArr = colors.array as Float32Array
 
-    // spawn to keep the burn alive
-    if (active) {
+    // spawn only during the ignition window
+    if (active && burnAge.current < SPAWN_WINDOW) {
       spawnAcc.current += SPAWN_RATE * dt
       while (spawnAcc.current >= 1 && freeRays.current.length > 0) {
         spawnAcc.current -= 1
@@ -345,22 +297,12 @@ export default function SparkBurst({ active, paused = false }: SparkBurstProps) 
       mat.opacity = 0.4 * Math.pow(1 - p, 1.6) * g
     }
 
-    // ---- update stars ----
-    for (let i = 0; i < STAR_COUNT; i++) {
-      const st = stars[i]
-      const mat = starMats.current[i]
-      const sprite = starRefs.current[i]
-      if (!mat || !sprite) continue
-      const tw = Math.sin((starClock.current / st.period + st.offset) * Math.PI * 2)
-      const tw01 = Math.max(0, tw)
-      mat.opacity = Math.pow(tw01, 2.4) * st.maxO * g
-      sprite.scale.setScalar(st.scale * (0.85 + 0.3 * tw01))
-    }
-
     // ---- bright core at the emission point ----
+    // one-shot: the core dies with the burst (breathing takes over after)
     if (coreMat.current) {
-      const flicker = 0.82 + 0.18 * Math.sin(starClock.current * 13)
-      coreMat.current.opacity = 0.75 * g * flicker
+      const flicker = 0.82 + 0.18 * Math.sin(burnAge.current * 13)
+      const coreEnv = 1 - smoothstep(2.2, 3.4, burnAge.current)
+      coreMat.current.opacity = 0.75 * g * flicker * coreEnv
     }
   })
 
@@ -401,30 +343,6 @@ export default function SparkBurst({ active, paused = false }: SparkBurstProps) 
             side={THREE.DoubleSide}
           />
         </mesh>
-      ))}
-
-      {/* twinkling four-point stars */}
-      {stars.map((st, i) => (
-        <sprite
-          key={`star${i}`}
-          ref={(s) => {
-            starRefs.current[i] = s
-          }}
-          position={[st.x, st.y, st.z]}
-          scale={[st.scale, st.scale, 1]}
-          renderOrder={7}
-        >
-          <spriteMaterial
-            ref={(m) => {
-              starMats.current[i] = m
-            }}
-            map={starTexture}
-            transparent
-            opacity={0}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-          />
-        </sprite>
       ))}
 
       {/* bright heart of the burst */}
