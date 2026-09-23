@@ -6,7 +6,7 @@ import { useFrame } from "@react-three/fiber"
 import { BODY_TOP_Y, RING_CAP_HEIGHT, RING_RADIUS, buildLanternGeometry } from "@/lib/lantern/geometry"
 import { ensureFace } from "@/lib/lantern/faces"
 import { LanternCanvas } from "./LanternCanvas"
-import { computeBreath, computeIdleSway, computeIgnitionSwell, computeLightingFrame, LIGHTING_DURATION } from "./LanternLighting"
+import { computeBreath, computeGust, computeIdleSway, computeIgnitionSwell, computeLightingFrame, gustNow, LIGHTING_DURATION } from "./LanternLighting"
 import type { FacePreset, LanternColor, LanternPhase } from "@/lib/lantern/types"
 
 type LanternModelProps = {
@@ -209,7 +209,11 @@ export default function LanternModel({ color, face, phase, onCoreClick, paused =
     if (over < 0) breathBlendRef.current = 0
     else breathBlendRef.current = Math.min(1, breathBlendRef.current + dt / 2)
     const breath = 1 + (computeBreath(lightTimeRef.current) - 1) * breathBlendRef.current
-    const lightMod = breath * (over >= 0 ? computeIgnitionSwell(over) : 1)
+    // 风过事件: every ~26s a gust passes — the light dips/flickers briefly
+    const gust = computeGust(gustNow())
+    const flickerNoise = 0.5 + 0.5 * Math.sin(timeRef.current * 9.3) * Math.sin(timeRef.current * 5.1 + 1.7)
+    const lightGust = 1 - 0.1 * gust.strength * flickerNoise
+    const lightMod = breath * (over >= 0 ? computeIgnitionSwell(over) : 1) * lightGust
 
     // UI illumination bridge: expose the lantern's light level to the DOM
     // as --lantern-glow so on-screen text is "lit by the lantern" — the UI
@@ -223,11 +227,12 @@ export default function LanternModel({ color, face, phase, onCoreClick, paused =
       }
     }
 
-    // gentle hanging sway, boosted briefly while lighting up
+    // gentle hanging sway, boosted briefly while lighting up, pushed by the
+    // passing gust (the lantern leans with the wind)
     if (swayGroup.current) {
       const boost = frame ? frame.swayBoost : 1
-      const idle = computeIdleSway(timeRef.current, boost)
-      swayGroup.current.rotation.z = idle.rotZ
+      const idle = computeIdleSway(timeRef.current, boost * (1 + gust.strength * 2.2))
+      swayGroup.current.rotation.z = idle.rotZ + gust.strength * gust.dir * 0.02
       swayGroup.current.rotation.x = idle.rotX
     }
 

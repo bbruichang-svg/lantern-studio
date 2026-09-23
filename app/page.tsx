@@ -379,6 +379,7 @@ export default function MvpPage() {
         onCoreClick={handleCoreClick}
         paused={generating}
         captureApiRef={captureApi}
+        ringText={sceneSong?.moonLyric ?? null}
       />
 
       {/* ---------------- LANDING ---------------- */}

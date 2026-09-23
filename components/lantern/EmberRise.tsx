@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from "react"
 import * as THREE from "three"
 import { useFrame } from "@react-three/fiber"
 import { BODY_TOP_Y, RING_CAP_HEIGHT } from "@/lib/lantern/geometry"
+import { computeGust, gustNow } from "./LanternLighting"
 
 type EmberRiseProps = {
   /** true once the lantern is fully lit (finished / share stages) */
@@ -152,6 +153,10 @@ export default function EmberRise({ active, tint, paused = false }: EmberRisePro
     }
 
     const tint = tintRef.current
+    // 风过事件: the passing gust advects the motes sideways (shared clock
+    // with the lantern's sway, so the wind reads as one event)
+    const gust = computeGust(gustNow())
+    const windDrift = gust.dir * gust.strength * 0.35 * dt
     for (let i = 0; i < COUNT; i++) {
       const s = state[i]
       const o = i * 3
@@ -177,6 +182,8 @@ export default function EmberRise({ active, tint, paused = false }: EmberRisePro
         colArr[o + 2] = 0
         continue
       }
+      // 风过事件: sideways advection
+      s.x0 += windDrift
       const x = s.x0 + Math.sin(s.age * s.freq * Math.PI + s.phase) * s.amp
       const y = ORIGIN_Y + s.vy * s.age
       const z = s.z0 + Math.cos(s.age * s.freq * Math.PI * 0.8 + s.phase) * s.amp * 0.7

@@ -82,6 +82,38 @@ export function computeIdleSway(time: number, boost: number): IdleFrame {
   }
 }
 
+// ---- 风过事件 ----------------------------------------------------------------
+// A steady loop never feels alive; "alive" is event-driven. Every ~26s a
+// night gust passes: the lantern leans, the wick flickers, the rising motes
+// are blown sideways. All components sample the SAME shared clock so the
+// sway and the ember advection happen together.
+
+/** shared wall clock for gust sampling (all components see the same gust) */
+export function gustNow(): number {
+  return typeof performance !== "undefined" ? performance.now() / 1000 : 0
+}
+
+/** deterministic hash → 0..1 (gust phase / duration / direction per cell) */
+function hash1(n: number): number {
+  const s = Math.imul(n ^ 0x9e3779b9, 0x85ebca6b) >>> 0
+  return ((s ^ (s >>> 13)) >>> 0) / 4294967296
+}
+
+const GUST_PERIOD = 26
+
+/** gust envelope 0..1 (sin bump) and direction -1|1 for the gust active at time t */
+export function computeGust(t: number): { strength: number; dir: number } {
+  const cell = Math.floor(t / GUST_PERIOD)
+  const r = hash1(cell)
+  const start = cell * GUST_PERIOD + r * GUST_PERIOD * 0.55
+  const dur = 2.2 + hash1(cell + 977) * 1.4
+  const local = t - start
+  if (local < 0 || local > dur) return { strength: 0, dir: 1 }
+  const p = local / dur
+  const strength = Math.pow(Math.sin(p * Math.PI), 1.5)
+  return { strength, dir: hash1(cell + 4241) > 0.5 ? 1 : -1 }
+}
+
 export function lerpColor(current: THREE.Color, target: THREE.Color, delta: number, speed = 5): void {
   current.lerp(target, 1 - Math.exp(-speed * delta))
 }
