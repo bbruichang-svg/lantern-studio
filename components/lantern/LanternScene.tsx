@@ -5,6 +5,7 @@ import * as THREE from "three"
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
 import { OrbitControls } from "@react-three/drei"
 import LanternModel from "./LanternModel"
+import SparkBurst from "./SparkBurst"
 import type { FacePreset, LanternColor, LanternPhase } from "@/lib/lantern/types"
 
 type LanternSceneProps = {
@@ -225,6 +226,8 @@ export default function LanternScene({
       {moon && <MoonDisc lit={lit} />}
 
       <LanternModel color={color} face={face} phase={phase} onCoreClick={onCoreClick} paused={paused} />
+      {/* sparkler burn — ignites once the lighting timeline completes */}
+      <SparkBurst active={phase === "finished"} paused={paused} />
       <CameraFit pullBack={lit} />
       {captureApiRef && <CaptureBridge apiRef={captureApiRef} />}
 
