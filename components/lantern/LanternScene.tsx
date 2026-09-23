@@ -7,7 +7,9 @@ import { OrbitControls } from "@react-three/drei"
 import LanternModel from "./LanternModel"
 import EmberRise from "./EmberRise"
 import AwakenedStars from "./AwakenedStars"
-import type { FacePreset, LanternColor, LanternPhase } from "@/lib/lantern/types"
+import ReleaseGround from "./ReleaseGround"
+import SoarController, { APEX_Y } from "./SoarController"
+import type { FacePreset, LanternColor, LanternPhase, ReleaseStage } from "@/lib/lantern/types"
 
 type LanternSceneProps = {
   color: LanternColor
@@ -28,10 +30,25 @@ type LanternSceneProps = {
   charging?: boolean
   onHoldStart?: (x: number, y: number) => void
   onHoldCancel?: () => void
+  /**
+   * Release route only: the current ReleaseStage. When set, the lantern gets
+   * a grounded contact shadow and the soar flight timeline drives its
+   * transform. Other routes leave it undefined — zero impact.
+   */
+  releaseStage?: ReleaseStage
+  /** fired once when the soar timeline finishes (soar → apex) */
+  onSoarComplete?: () => void
 }
 
 /** registers a synchronous canvas-capture function for the share card */
-function CaptureBridge({ apiRef }: { apiRef: { current: (() => string) | null } }) {
+function CaptureBridge({
+  apiRef,
+  targetY = 0,
+}: {
+  apiRef: { current: (() => string) | null }
+  /** vertical center of the lantern at capture time (apex framing on /release) */
+  targetY?: number
+}) {
   const gl = useThree((s) => s.gl)
   const scene = useThree((s) => s.scene)
   const camera = useThree((s) => s.camera)
@@ -47,8 +64,8 @@ function CaptureBridge({ apiRef }: { apiRef: { current: (() => string) | null } 
       const aspect = cam.aspect
       const fill = Math.min(0.5635, 0.6125 * aspect) // lantern height / capture height
       const d = 1.1 / Math.tan((fill * cam.fov * Math.PI) / 360) + 1.06
-      cam.position.set(0, 0.55, d)
-      cam.lookAt(0, 0, 0)
+      cam.position.set(0, 0.55 + targetY, d)
+      cam.lookAt(0, targetY, 0)
       gl.render(scene, cam)
       const url = gl.domElement.toDataURL("image/png")
       cam.position.copy(prevPos)
@@ -59,7 +76,7 @@ function CaptureBridge({ apiRef }: { apiRef: { current: (() => string) | null } 
     return () => {
       apiRef.current = null
     }
-  }, [apiRef, gl, scene, camera])
+  }, [apiRef, gl, scene, camera, targetY])
 
   return null
 }
@@ -215,6 +232,8 @@ export default function LanternScene({
   charging,
   onHoldStart,
   onHoldCancel,
+  releaseStage,
+  onSoarComplete,
 }: LanternSceneProps) {
   const resolvedEnv: "studio" | "nightDim" | "nightLit" =
     env ?? (phase === "studio" || phase === "ready" ? "studio" : "nightLit")
@@ -225,6 +244,9 @@ export default function LanternScene({
     () => new THREE.Color(color.glow).lerp(new THREE.Color("#FFD9A6"), 0.6),
     [color.glow],
   )
+  // release-route extras — inert on every other route
+  const lanternGroup = useRef<THREE.Group>(null)
+  const soarProgress = useRef(0)
 
   return (
     <Canvas
@@ -241,26 +263,39 @@ export default function LanternScene({
     >
       <EnvironmentLights env={resolvedEnv} />
       {moon && <MoonDisc lit={lit} />}
+      {releaseStage && <ReleaseGround soarProgress={soarProgress} lit={lit} />}
 
-      <LanternModel
-        color={color}
-        face={face}
-        phase={phase}
-        onCoreClick={onCoreClick}
-        paused={paused}
-        holdEnabled={holdEnabled}
-        charging={charging}
-        onHoldStart={onHoldStart}
-        onHoldCancel={onHoldCancel}
-      />
+      <group ref={lanternGroup}>
+        <LanternModel
+          color={color}
+          face={face}
+          phase={phase}
+          onCoreClick={onCoreClick}
+          paused={paused}
+          holdEnabled={holdEnabled}
+          charging={charging}
+          onHoldStart={onHoldStart}
+          onHoldCancel={onHoldCancel}
+        />
+      </group>
+      {releaseStage && (
+        <SoarController
+          stage={releaseStage}
+          groupRef={lanternGroup}
+          progressRef={soarProgress}
+          onSoarComplete={onSoarComplete}
+        />
+      )}
       {/* steady state — warm motes rising from the top opening */}
       <EmberRise active={phase === "finished"} tint={emberTint} paused={paused} />
       {/* the night sky answers: stars wake near→far once the lantern is lit */}
       <AwakenedStars active={lit} paused={paused} />
       <CameraFit pullBack={lit} />
-      {captureApiRef && <CaptureBridge apiRef={captureApiRef} />}
+      {captureApiRef && <CaptureBridge apiRef={captureApiRef} targetY={releaseStage ? APEX_Y : 0} />}
 
       <OrbitControls
+        makeDefault
+        enabled={releaseStage !== "soar"}
         enablePan={false}
         enableDamping
         dampingFactor={0.06}

@@ -35,6 +35,34 @@ const START_DELAY = 0 // motes take over the moment the lantern is lit
 
 const WARM = new THREE.Color("#FFD9A6")
 
+type Mote = {
+  age: number
+  life: number
+  vy: number
+  amp: number
+  freq: number
+  phase: number
+  x0: number
+  z0: number
+  whiten: number
+  alive: boolean
+}
+
+function createMotes(): Mote[] {
+  return Array.from({ length: COUNT }, () => ({
+    age: 0,
+    life: 0,
+    vy: 0.3,
+    amp: 0.12,
+    freq: 1.2,
+    phase: 0,
+    x0: 0,
+    z0: 0,
+    whiten: 0,
+    alive: false,
+  }))
+}
+
 function makeMoteTexture(): THREE.CanvasTexture {
   const c = document.createElement("canvas")
   c.width = 64
@@ -65,46 +93,22 @@ export default function EmberRise({ active, tint, paused = false }: EmberRisePro
     return g
   }, [])
 
-  // per-particle state (plain arrays — no React state, no per-frame allocs)
-  const state = useMemo(
-    () =>
-      Array.from({ length: COUNT }, () => ({
-        age: 0,
-        life: 0,
-        vy: 0.3,
-        amp: 0.12,
-        freq: 1.2,
-        phase: 0,
-        x0: 0,
-        z0: 0,
-        whiten: 0,
-        alive: false,
-      })),
-    [],
-  )
+  // All mutable particle state lives behind refs — the react-hooks
+  // immutability rules forbid in-place mutation of values returned from
+  // hooks, so per-frame writes go through ref paths instead.
+  const stateRef = useRef<Mote[] | null>(null)
   const free = useRef<number[]>([])
   const spawnAcc = useRef(0)
   const activeAge = useRef(0)
   const wasActive = useRef(false)
   const globalRef = useRef(0)
   const tintRef = useRef(tint)
-  tintRef.current = tint
+  const groupRef = useRef<THREE.Group>(null)
+  const pointsRef = useRef<THREE.Points>(null)
 
-  const initMote = (i: number) => {
-    const s = state[i]
-    const r = Math.sqrt(Math.random()) * 0.12
-    const a = Math.random() * Math.PI * 2
-    s.x0 = Math.cos(a) * r
-    s.z0 = Math.sin(a) * r
-    s.age = 0
-    s.life = 4 + Math.random() * 3
-    s.vy = 0.22 + Math.random() * 0.23
-    s.amp = 0.06 + Math.random() * 0.14
-    s.freq = 0.6 + Math.random() * 1.2
-    s.phase = Math.random() * Math.PI * 2
-    s.whiten = Math.random() * 0.35
-    s.alive = true
-  }
+  useEffect(() => {
+    tintRef.current = tint
+  }, [tint])
 
   useEffect(() => {
     return () => {
@@ -113,11 +117,12 @@ export default function EmberRise({ active, tint, paused = false }: EmberRisePro
     }
   }, [geo, texture])
 
-  const groupRef = useRef<THREE.Group>(null)
-
   useFrame((_, delta) => {
     if (paused) return // frozen for share-card capture
     const dt = Math.min(delta, 0.05)
+
+    if (!stateRef.current) stateRef.current = createMotes()
+    const state = stateRef.current
 
     const target = active ? 1 : 0
     globalRef.current += (target - globalRef.current) * (1 - Math.exp(-1.8 * dt))
@@ -135,10 +140,29 @@ export default function EmberRise({ active, tint, paused = false }: EmberRisePro
     }
     if (active) activeAge.current += dt
 
-    const positions = geo.attributes.position as THREE.BufferAttribute
-    const colors = geo.attributes.color as THREE.BufferAttribute
+    // buffer arrays are read from the mounted points object (ref path)
+    const pgeo = pointsRef.current?.geometry
+    if (!pgeo) return
+    const positions = pgeo.attributes.position as THREE.BufferAttribute
+    const colors = pgeo.attributes.color as THREE.BufferAttribute
     const posArr = positions.array as Float32Array
     const colArr = colors.array as Float32Array
+
+    const initMote = (i: number) => {
+      const s = state[i]
+      const r = Math.sqrt(Math.random()) * 0.12
+      const a = Math.random() * Math.PI * 2
+      s.x0 = Math.cos(a) * r
+      s.z0 = Math.sin(a) * r
+      s.age = 0
+      s.life = 4 + Math.random() * 3
+      s.vy = 0.22 + Math.random() * 0.23
+      s.amp = 0.06 + Math.random() * 0.14
+      s.freq = 0.6 + Math.random() * 1.2
+      s.phase = Math.random() * Math.PI * 2
+      s.whiten = Math.random() * 0.35
+      s.alive = true
+    }
 
     // ignition surge: a dense column lifts at once, then the rise settles
     // into the sparse steady state
@@ -204,7 +228,7 @@ export default function EmberRise({ active, tint, paused = false }: EmberRisePro
 
   return (
     <group ref={groupRef} visible={false}>
-      <points geometry={geo} renderOrder={6} frustumCulled={false}>
+      <points ref={pointsRef} geometry={geo} renderOrder={6} frustumCulled={false}>
         <pointsMaterial
           size={0.085}
           map={texture}

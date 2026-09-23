@@ -31,3 +31,20 @@ export type MvpStage =
   | "lighting"
   | "finished"
   | "share"
+
+/**
+ * Release (放灯) route state machine — separate from MvpStage so the root
+ * MVP stays untouched. The lantern is charged by holding, then released to
+ * soar; lighting & finished are folded into the charge→release moment.
+ * arrive: idle grounded lantern · wish: write a blessing · charge: hold to
+ * charge (chargeRef drives the glow) · soar: rising · apex: high & still,
+ * moon-framed · memory: blessing surfaces · share: card/link.
+ */
+export type ReleaseStage =
+  | "arrive"
+  | "wish"
+  | "charge"
+  | "soar"
+  | "apex"
+  | "memory"
+  | "share"

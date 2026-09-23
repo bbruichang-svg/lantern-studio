@@ -24,6 +24,19 @@ type AwakenedStarsProps = {
 const ORIGIN_Y = BODY_TOP_Y + RING_CAP_HEIGHT
 const STAR_COUNT = 26
 
+/** deterministic PRNG (mulberry32) — pure, so the star layout is stable
+    across renders and the react-hooks purity rule stays satisfied */
+function makeRng(seed: number): () => number {
+  let a = seed >>> 0
+  return () => {
+    a += 0x6d2b79f5
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
 function makeStarTexture(): THREE.CanvasTexture {
   const c = document.createElement("canvas")
   c.width = 64
@@ -64,19 +77,20 @@ export default function AwakenedStars({ active, paused = false }: AwakenedStarsP
   // stars scattered in a shell above & around the lantern, sorted near→far
   // so the wake spreads outward from the light
   const stars = useMemo(() => {
+    const rand = makeRng(20260923)
     const list = Array.from({ length: STAR_COUNT }, () => {
-      const az = Math.random() * Math.PI * 2
-      const el = 0.08 + Math.random() * 0.95
-      const r = 1.6 + Math.random() * 2.0
+      const az = rand() * Math.PI * 2
+      const el = 0.08 + rand() * 0.95
+      const r = 1.6 + rand() * 2.0
       return {
         x: Math.cos(el) * Math.sin(az) * r,
         y: ORIGIN_Y + Math.sin(el) * r * 1.05,
         z: Math.cos(el) * Math.cos(az) * r * 0.7 - 0.3,
         delay: 0,
-        maxO: 0.5 + Math.random() * 0.4,
-        scale: 0.06 + Math.random() * 0.08,
-        freq: 0.35 + Math.random() * 0.5,
-        phase: Math.random() * Math.PI * 2,
+        maxO: 0.5 + rand() * 0.4,
+        scale: 0.06 + rand() * 0.08,
+        freq: 0.35 + rand() * 0.5,
+        phase: rand() * Math.PI * 2,
       }
     })
     const dx0 = 0
@@ -84,7 +98,7 @@ export default function AwakenedStars({ active, paused = false }: AwakenedStarsP
     const dz0 = 0
     list.forEach((st) => {
       const d = Math.hypot(st.x - dx0, st.y - dy0, st.z - dz0)
-      st.delay = 0.4 + (d / 5) * 5.2 + Math.random() * 0.35
+      st.delay = 0.4 + (d / 5) * 5.2 + rand() * 0.35
     })
     return list
   }, [])

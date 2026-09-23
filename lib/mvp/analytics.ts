@@ -20,6 +20,20 @@ export type MvpEvent =
   | "share_downloaded"
   | "share_native"
   | "share_closed"
+  // release (放灯) route — separate funnel from the root MVP
+  | "release_page_view"
+  | "release_start"
+  | "release_charge_entered"
+  | "release_hold_started"
+  | "release_hold_short"
+  | "release_hold_released"
+  | "release_soar_complete"
+  | "release_memory"
+  | "release_song_clicked"
+  | "release_share_opened"
+  | "release_share_opened_card"
+  | "release_share_native"
+  | "release_share_downloaded"
 
 type Payload = Record<string, string | number>
 type Sink = (event: MvpEvent, payload?: Payload) => void

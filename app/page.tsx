@@ -69,6 +69,12 @@ export default function MvpPage() {
   const [face, setFace] = useState<FacePreset | null>(() => getDefaultFace("chengdu"))
   const [mode, setMode] = useState<StudioMode | null>(null)
   const [song, setSong] = useState<MvpSong | null>(null)
+  // landing 计数读 localStorage — SSR 渲染 0，挂载后再同步，避免水合不匹配
+  // （queueMicrotask：新版 react-hooks 规则禁止 effect 内同步 setState）
+  const [count, setCount] = useState(0)
+  useEffect(() => {
+    queueMicrotask(() => setCount(litCount()))
+  }, [])
 
   // ---- share card state ----
   const captureApi = useRef<(() => string) | null>(null)
@@ -427,7 +433,7 @@ export default function MvpPage() {
       {stage === "landing" && (
         <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-end pb-[11vh]">
           {/* 计数四档文案 — 本机口径，数字永远真实（PRD §7） */}
-          <p className="text-xs tracking-[0.3em] text-[#E8E4DA]/60">{counterCopy(litCount()).main}</p>
+          <p className="text-xs tracking-[0.3em] text-[#E8E4DA]/60">{counterCopy(count).main}</p>
           <h1 className="mt-4 text-3xl font-light tracking-[0.42em] sm:text-4xl">点一盏灯</h1>
           <p className="mt-3 text-[11px] tracking-[0.4em] text-[#E8E4DA]/55">MAKE IT. LIGHT IT.</p>
           <button
@@ -438,7 +444,7 @@ export default function MvpPage() {
             ENTER
           </button>
           <p className="mt-5 text-[10px] tracking-[0.25em] text-[#E8E4DA]/40">
-            {counterCopy(litCount()).sub}
+            {counterCopy(count).sub}
           </p>
         </div>
       )}
