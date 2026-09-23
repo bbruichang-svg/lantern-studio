@@ -5,7 +5,6 @@ import * as THREE from "three"
 import { Canvas, useFrame, useThree } from "@react-three/fiber"
 import { OrbitControls } from "@react-three/drei"
 import LanternModel from "./LanternModel"
-import SparkBurst from "./SparkBurst"
 import EmberRise from "./EmberRise"
 import AwakenedStars from "./AwakenedStars"
 import type { FacePreset, LanternColor, LanternPhase } from "@/lib/lantern/types"
@@ -234,8 +233,6 @@ export default function LanternScene({
       {moon && <MoonDisc lit={lit} />}
 
       <LanternModel color={color} face={face} phase={phase} onCoreClick={onCoreClick} paused={paused} />
-      {/* ignition burst — one-shot, fades after ~4s */}
-      <SparkBurst active={phase === "finished"} paused={paused} />
       {/* steady state — warm motes rising from the top opening */}
       <EmberRise active={phase === "finished"} tint={emberTint} paused={paused} />
       {/* the night sky answers: stars wake near→far once the lantern is lit */}

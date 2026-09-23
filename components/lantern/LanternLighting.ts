@@ -55,6 +55,25 @@ export function computeBreath(t: number): number {
   return 1 + 0.06 * Math.sin((t * Math.PI * 2) / 5.2) + 0.03 * Math.sin((t * Math.PI * 2) / 2.3 + 1.7)
 }
 
+/**
+ * Ignition swell — the lantern-native "pop" the moment the lighting
+ * timeline completes: the transmitted light surges PAST its steady level
+ * (as if exhaled alight) then settles back. Asymmetric bump: fast rise
+ * (~0.7s), slow decay (~1.9s), window 2.6s. Returns a multiplier (1 at
+ * rest, peak ≈ 1.38). `over` = seconds since the timeline completed.
+ */
+const SWELL_WINDOW = 2.6
+const SWELL_RISE = 0.27 // fraction of the window spent rising
+export function computeIgnitionSwell(over: number): number {
+  if (over <= 0) return 1
+  const p = Math.min(1, over / SWELL_WINDOW)
+  const bump =
+    p < SWELL_RISE
+      ? Math.sin((Math.PI * p) / (2 * SWELL_RISE))
+      : Math.sin((Math.PI * (1 - p)) / (2 * (1 - SWELL_RISE)))
+  return 1 + 0.38 * bump * bump
+}
+
 /** almost imperceptible hanging-in-air sway, 4–7s periods, ±2–4° max */
 export function computeIdleSway(time: number, boost: number): IdleFrame {
   return {

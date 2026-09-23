@@ -6,7 +6,7 @@ import { useFrame } from "@react-three/fiber"
 import { BODY_TOP_Y, RING_CAP_HEIGHT, RING_RADIUS, buildLanternGeometry } from "@/lib/lantern/geometry"
 import { ensureFace } from "@/lib/lantern/faces"
 import { LanternCanvas } from "./LanternCanvas"
-import { computeBreath, computeIdleSway, computeLightingFrame, LIGHTING_DURATION } from "./LanternLighting"
+import { computeBreath, computeIdleSway, computeIgnitionSwell, computeLightingFrame, LIGHTING_DURATION } from "./LanternLighting"
 import type { FacePreset, LanternColor, LanternPhase } from "@/lib/lantern/types"
 
 type LanternModelProps = {
@@ -202,18 +202,21 @@ export default function LanternModel({ color, face, phase, onCoreClick, paused =
     const frame = lit ? computeLightingFrame(lightTimeRef.current) : null
 
     // steady-state breathing: once the timeline has run its course, blend
-    // the dual-frequency swell into every light channel over ~2s
+    // the dual-frequency swell into every light channel over ~2s. On top of
+    // it, the ignition swell surges past the steady level right at
+    // completion and settles back — the lantern-native "pop".
     const over = lit ? lightTimeRef.current - LIGHTING_DURATION : -1
     if (over < 0) breathBlendRef.current = 0
     else breathBlendRef.current = Math.min(1, breathBlendRef.current + dt / 2)
     const breath = 1 + (computeBreath(lightTimeRef.current) - 1) * breathBlendRef.current
+    const lightMod = breath * (over >= 0 ? computeIgnitionSwell(over) : 1)
 
     // UI illumination bridge: expose the lantern's light level to the DOM
     // as --lantern-glow so on-screen text is "lit by the lantern" — the UI
     // and the lantern share a single light source. translucent leads (0.4s),
     // glow completes the bloom (2.2s); max() gives a smooth 0→1.
     if (typeof document !== "undefined") {
-      const g = frame ? Math.max(frame.translucent, frame.glow) * breath : 0
+      const g = frame ? Math.max(frame.translucent, frame.glow) * lightMod : 0
       if (Math.abs(g - uiGlowRef.current) > 0.008) {
         uiGlowRef.current = g
         document.documentElement.style.setProperty("--lantern-glow", g.toFixed(3))
@@ -238,23 +241,23 @@ export default function LanternModel({ color, face, phase, onCoreClick, paused =
       if (coreLight.current) coreLight.current.getWorldPosition(worldPosTmp)
       transUniforms.current.uTransLightPos.value.copy(worldPosTmp)
       transUniforms.current.uTransColor.value.lerp(transTarget, k)
-      transUniforms.current.uTransIntensity.value = frame ? frame.translucent * TRANSLUCENT_PEAK * breath : 0
+      transUniforms.current.uTransIntensity.value = frame ? frame.translucent * TRANSLUCENT_PEAK * lightMod : 0
     }
     if (coreLight.current) {
       coreLight.current.color.lerp(lightTarget, k)
-      coreLight.current.intensity = frame ? frame.pointIntensity * breath : 0
+      coreLight.current.intensity = frame ? frame.pointIntensity * lightMod : 0
     }
     if (glowMaterial.current) {
       glowMaterial.current.color.lerp(haloTarget, k)
-      glowMaterial.current.opacity = frame ? frame.glow * 0.09 * breath : 0
+      glowMaterial.current.opacity = frame ? frame.glow * 0.09 * lightMod : 0
     }
     if (bloomMaterial.current) {
       bloomMaterial.current.color.lerp(haloTarget, k)
-      bloomMaterial.current.opacity = frame ? frame.glow * 0.12 * breath : 0
+      bloomMaterial.current.opacity = frame ? frame.glow * 0.12 * lightMod : 0
     }
     if (coreBulb.current) {
       coreBulb.current.color.lerp(targetGlow, k)
-      coreBulb.current.opacity = frame ? 0.05 + frame.core * 0.95 * breath : 0.05
+      coreBulb.current.opacity = frame ? 0.05 + frame.core * 0.95 * lightMod : 0.05
     }
     if (sparkMesh.current && sparkMaterial.current) {
       const s = frame ? frame.spark : 0

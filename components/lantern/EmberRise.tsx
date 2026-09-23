@@ -20,14 +20,17 @@ type EmberRiseProps = {
  * like incense warmth, each tinted by the city colour the user chose.
  *
  * One THREE.Points draw call; per-particle alpha lives in the colour
- * attribute (additive blending — black is invisible). Starts ~2s after
- * activation so the ignition burst hands over cleanly.
+ * attribute (additive blending — black is invisible). At activation it
+ * surges (a dense column of motes lifted at once — the ignition moment),
+ * then settles into the sparse steady rise.
  */
 
 const ORIGIN_Y = BODY_TOP_Y + RING_CAP_HEIGHT + 0.06
 const COUNT = 120
-const SPAWN_RATE = 2.6 // motes / second
-const START_DELAY = 2.0 // seconds after activation
+const SPAWN_RATE = 2.6 // motes / second, steady state
+const SURGE_RATE = 26 // motes / second during the ignition surge
+const SURGE_WINDOW = 1.4 // seconds of surge after activation
+const START_DELAY = 0 // motes take over the moment the lantern is lit
 
 const WARM = new THREE.Color("#FFD9A6")
 
@@ -136,9 +139,11 @@ export default function EmberRise({ active, tint, paused = false }: EmberRisePro
     const posArr = positions.array as Float32Array
     const colArr = colors.array as Float32Array
 
-    // spawn only after the ignition burst has had the stage long enough
+    // ignition surge: a dense column lifts at once, then the rise settles
+    // into the sparse steady state
     if (active && activeAge.current > START_DELAY) {
-      spawnAcc.current += SPAWN_RATE * dt
+      const rate = activeAge.current < SURGE_WINDOW ? SURGE_RATE : SPAWN_RATE
+      spawnAcc.current += rate * dt
       while (spawnAcc.current >= 1 && free.current.length > 0) {
         spawnAcc.current -= 1
         initMote(free.current.pop() as number)
