@@ -12,6 +12,10 @@ type StudioToolbarProps = {
   onColorSelect: (colorId: string) => void
   selectedFace: FacePreset | null
   onFaceSelect: (face: FacePreset | null) => void
+  /** the user's hand-drawn face (root MVP only — studio keeps DTZ-only) */
+  customFace?: FacePreset | null
+  /** opens the hand-drawing board; omit to hide the draw entry */
+  onDraw?: () => void
   /** "ink" = dark text for bright backgrounds (studio) · "night" = light text for dark scenes */
   tone?: "ink" | "night"
   /** optional primary action rendered under the mode tabs (e.g. the MVP 点亮 button) */
@@ -25,6 +29,8 @@ export default function StudioToolbar({
   onColorSelect,
   selectedFace,
   onFaceSelect,
+  customFace,
+  onDraw,
   tone = "ink",
   action,
 }: StudioToolbarProps) {
@@ -46,7 +52,13 @@ export default function StudioToolbar({
           />
         </div>
         <div className={mode === "face" ? "block" : "hidden"}>
-          <FacePicker tone={tone} selectedId={selectedFace?.id ?? null} onSelect={onFaceSelect} />
+          <FacePicker
+            tone={tone}
+            selectedId={selectedFace?.id ?? null}
+            onSelect={onFaceSelect}
+            customFace={customFace}
+            onDraw={onDraw}
+          />
         </div>
       </div>
 

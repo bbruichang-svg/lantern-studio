@@ -4,11 +4,18 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import StudioToolbar from "@/components/lantern/StudioToolbar"
 import ShareView from "@/components/lantern/ShareView"
+import FacePainter from "@/components/lantern/FacePainter"
 import { getColorById, getDefaultFace, getFaceById } from "@/lib/lantern/colors"
 import { renderShareCard } from "@/lib/lantern/share-card"
-import { preloadAllFaces } from "@/lib/lantern/faces"
+import { ensureFace, preloadAllFaces } from "@/lib/lantern/faces"
 import { pickSong, songLink, getSongById, type MvpSong } from "@/lib/mvp/songs"
 import { track } from "@/lib/mvp/analytics"
+import {
+  customFacePreset,
+  readCustomFace,
+  writeCustomFace,
+  type StoredCustomFace,
+} from "@/lib/mvp/custom-face"
 import {
   BLESSING_MAX,
   EXAMPLE_BLESSINGS,
@@ -72,8 +79,19 @@ export default function MvpPage() {
   // landing 计数读 localStorage — SSR 渲染 0，挂载后再同步，避免水合不匹配
   // （queueMicrotask：新版 react-hooks 规则禁止 effect 内同步 setState）
   const [count, setCount] = useState(0)
+  // 手绘表情 — 本机单槽，挂载时恢复
+  const [customFace, setCustomFace] = useState<FacePreset | null>(null)
+  const [painterOpen, setPainterOpen] = useState(false)
   useEffect(() => {
-    queueMicrotask(() => setCount(litCount()))
+    queueMicrotask(() => {
+      setCount(litCount())
+      const stored = readCustomFace()
+      if (stored) {
+        const f = customFacePreset(stored)
+        setCustomFace(f)
+        void ensureFace(f.src) // warm the texture cache for instant swaps
+      }
+    })
   }, [])
 
   // ---- share card state ----
@@ -130,9 +148,15 @@ export default function MvpPage() {
 
   const color = getColorById(colorId)
 
-  // what the 3D scene shows — the user's own lantern, or a shared one
+  // what the 3D scene shows — the user's own lantern, or a shared one.
+  // Shared lamps carrying faceId "custom" fall back to THIS device's own
+  // drawing (links can't carry the image), then to the city default.
   const sceneColor = shared ? getColorById(shared.c) : color
-  const sceneFace = shared ? getFaceById(shared.f) ?? getDefaultFace(shared.c) : face
+  const sceneFace = shared
+    ? getFaceById(shared.f) ??
+      (shared.f === "custom" ? customFace : null) ??
+      getDefaultFace(shared.c)
+    : face
   const sceneSong = shared ? getSongById(shared.s) : song
   const sceneBlessing = shared ? shared.b : blessing.trim()
   const sceneNo = shared ? shared.n : litNo
@@ -169,6 +193,28 @@ export default function MvpPage() {
       setColorId(next.colorId)
     },
     [],
+  )
+
+  // ---- 手绘表情 ----
+  const openPainter = useCallback(() => {
+    track("face_draw_opened")
+    setPainterOpen(true)
+  }, [])
+
+  const handlePainterSaved = useCallback(
+    (src: string) => {
+      // ink was matched to the colour worn while drawing — freeze it there
+      const stored: StoredCustomFace = { src, colorId, savedAt: Date.now() }
+      const ok = writeCustomFace(stored)
+      const f = customFacePreset(stored)
+      void ensureFace(src) // warm the texture cache before the swap
+      setCustomFace(f)
+      setFace(f)
+      setPainterOpen(false)
+      track("face_selected", { face: "custom" })
+      if (!ok) showToast("本机空间不足，手绘仅本次有效")
+    },
+    [colorId, showToast],
   )
 
   // the flame CTA / the wick itself now lead to the blessing step —
@@ -464,6 +510,8 @@ export default function MvpPage() {
             onColorSelect={handleColorSelect}
             selectedFace={face}
             onFaceSelect={handleFaceSelect}
+            customFace={customFace}
+            onDraw={openPainter}
             action={
               /* the CTA is a small wick flame — the fire itself invites the
                  click (hover brightens, click moves to the blessing step) */
@@ -687,6 +735,15 @@ export default function MvpPage() {
             {toast}
           </p>
         </div>
+      )}
+
+      {/* 手绘画板 — modal above everything, only reachable from MAKE */}
+      {painterOpen && (
+        <FacePainter
+          colorId={colorId}
+          onSaved={handlePainterSaved}
+          onClosed={() => setPainterOpen(false)}
+        />
       )}
 
       {/* 署名角标（个人项目定位，PRD 合规精神的轻量版） */}

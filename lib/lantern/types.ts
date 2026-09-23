@@ -10,10 +10,13 @@ export type LanternColor = {
 export type FacePreset = {
   id: string
   name: string
-  /** /faces/<slug>.png — preprocessed DTZ artwork (strokes on transparent disc) */
+  /** /faces/<slug>.png — preprocessed DTZ artwork (strokes on transparent disc).
+   *  Custom hand-drawn faces use a PNG dataURL here; loading is identical. */
   src: string
   /** the city colour this face belongs to */
   colorId: string
+  /** true for the user's own hand-drawn face (single local slot) */
+  custom?: boolean
 }
 
 export type StudioMode = "color" | "face"

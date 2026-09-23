@@ -15,6 +15,7 @@ import {
   isBlessingAllowed,
 } from "@/lib/mvp/blessings"
 import { addLantern, formatNumber } from "@/lib/mvp/storage"
+import { customFacePreset, readCustomFace } from "@/lib/mvp/custom-face"
 import { lanternLink, readLanternFromSearch, type LanternPayload } from "@/lib/mvp/share"
 import type { FacePreset, LanternPhase, ReleaseStage } from "@/lib/lantern/types"
 
@@ -82,7 +83,14 @@ export default function ReleasePage() {
 
   const color = getColorById(colorId)
   const sceneColor = shared ? getColorById(shared.c) : color
-  const sceneFace = shared ? getFaceById(shared.f) ?? getDefaultFace(shared.c) : face
+  // shared lamps with faceId "custom" fall back to THIS device's own
+  // drawing (links can't carry the image), then to the city default
+  const sharedCustom = shared && shared.f === "custom" ? readCustomFace() : null
+  const sceneFace = shared
+    ? getFaceById(shared.f) ??
+      (sharedCustom ? customFacePreset(sharedCustom) : null) ??
+      getDefaultFace(shared.c)
+    : face
   const sceneSong = shared ? getSongById(shared.s) : song
   const sceneBlessing = shared ? shared.b : blessing.trim()
   const sceneNo = shared ? shared.n : litNo
