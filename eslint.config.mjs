@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // root-level debug/verification scripts (playwright checks, probes)
+    "_*.cjs",
   ]),
 ]);
 
