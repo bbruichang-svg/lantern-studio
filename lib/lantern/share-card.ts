@@ -14,6 +14,9 @@
 export const CARD_WIDTH = 1080
 export const CARD_HEIGHT = 1440
 
+/** Site printed on the card footer — keep in sync with the live deploy host. */
+export const SITE_HOST = "706a633b06b6493ebae2904886f9b6ef.app.workbuddy.host"
+
 export type ShareCardOptions = {
   /** PNG data URL captured from the live WebGL canvas (frozen frame) */
   lanternCapture: string
@@ -253,7 +256,7 @@ async function composeCard(
   ctx.fillStyle = theme.inkDim(0.35)
   ctx.font = '300 22px "PingFang SC", "Microsoft YaHei", sans-serif'
   setLetterSpacing(ctx, 3)
-  ctx.fillText("moon-lantern.app.workbuddy.host", CARD_WIDTH / 2, CARD_HEIGHT * 0.938)
+  ctx.fillText(SITE_HOST, CARD_WIDTH / 2, CARD_HEIGHT * 0.938)
   setLetterSpacing(ctx, 0)
 
   // qrUrl intentionally unused for now — see ShareCardOptions.qrUrl
