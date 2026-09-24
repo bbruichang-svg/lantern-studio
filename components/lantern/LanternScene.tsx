@@ -190,22 +190,39 @@ function makeMoonTexture(): THREE.CanvasTexture {
   c.height = 256
   const ctx = c.getContext("2d")
   if (ctx) {
-    const g = ctx.createRadialGradient(128, 128, 30, 128, 128, 128)
-    g.addColorStop(0, "rgba(238,235,220,0.95)")
-    g.addColorStop(0.45, "rgba(238,235,220,0.55)")
-    g.addColorStop(0.75, "rgba(238,235,220,0.12)")
-    g.addColorStop(1, "rgba(238,235,220,0)")
+    // warm golden moon (参考图画风)：a DEFINED disc with a soft rim, not a fog
+    const g = ctx.createRadialGradient(128, 128, 70, 128, 128, 122)
+    g.addColorStop(0, "rgba(255,240,190,1)")
+    g.addColorStop(0.7, "rgba(255,220,130,0.85)")
+    g.addColorStop(0.88, "rgba(255,210,120,0.25)")
+    g.addColorStop(1, "rgba(255,205,115,0)")
     ctx.fillStyle = g
     ctx.fillRect(0, 0, 256, 256)
+    // faint maria — 3 low-alpha dark patches give the disc a moon feel
+    const mare: [number, number, number, number][] = [
+      [104, 96, 20, 0.1],
+      [148, 132, 14, 0.08],
+      [116, 152, 11, 0.07],
+    ]
+    for (const [mx, my, mr, ma] of mare) {
+      ctx.fillStyle = `rgba(196,150,70,${ma})`
+      ctx.beginPath()
+      ctx.arc(mx, my, mr, 0, Math.PI * 2)
+      ctx.fill()
+    }
   }
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
   return tex
 }
 
-/** ambient moon — atmosphere by default; during the dissolve merge it is
- * the destination the lantern's light flows into (boost 0→1, written by
- * DissolveController through moonBoostRef) */
+/** ambient moon — a warm golden disc that LIVES high in the frame once the
+ * lantern is lit (参考图构图: 枝横月面). During the dissolve merge it is the
+ * destination the lantern's light flows into (boost 0→1, written by
+ * DissolveController through moonBoostRef). */
+const MOON_BASE = { x: 0.55, y: 3.5, z: -4.5 }
+const MOON_BASE_SCALE = 1.7
+
 function MoonDisc({ lit, boostRef }: { lit: boolean; boostRef?: { current: number } }) {
   const texture = useMemo(() => makeMoonTexture(), [])
   const group = useRef<THREE.Group>(null)
@@ -217,22 +234,20 @@ function MoonDisc({ lit, boostRef }: { lit: boolean; boostRef?: { current: numbe
     if (material.current) {
       // narrative: the moon only reveals itself once the lantern is lit;
       // the dissolve boost pushes it from ambience to hero brightness
-      const o = lit ? Math.min(0.92, 0.38 + boost * 0.54) : 0
+      const o = lit ? Math.min(0.95, 0.55 + boost * 0.4) : 0
       material.current.opacity += (o - material.current.opacity) * k
     }
     if (group.current) {
-      // drifts slightly higher & closer once the lantern is lit; during the
-      // merge the moon leans IN — closer, larger, near upper-centre — to meet
-      // the lantern's light halfway. The end point must sit INSIDE the
-      // portrait frustum (±~1.1 world units at that depth), or the merged
-      // moon lands off-screen and the whole beat is wasted.
-      const x = -3.5 + 2.5 * boost
-      const y = (lit ? 2.62 : 2.3) + boost * 0.1
-      const z = -5.5 + 3.4 * boost
+      // resident high perch (portrait-frustum safe at z=-4.5); during the
+      // merge the moon leans IN toward the fixed merge end point — same
+      // DissolveController destination, expressed as boost interpolation.
+      const x = MOON_BASE.x - 1.6 * boost
+      const y = MOON_BASE.y - 0.78 * boost
+      const z = MOON_BASE.z + 2.4 * boost
       group.current.position.setX(group.current.position.x + (x - group.current.position.x) * k)
       group.current.position.setY(group.current.position.y + (y - group.current.position.y) * k)
       group.current.position.setZ(group.current.position.z + (z - group.current.position.z) * k)
-      const s = 1 + boost * 0.6
+      const s = MOON_BASE_SCALE - 0.15 * boost
       group.current.scale.setScalar(group.current.scale.x + (s - group.current.scale.x) * k)
       // dev probe: playwright reads this to debug the merge beat
       if (process.env.NODE_ENV !== "production") {
@@ -248,8 +263,8 @@ function MoonDisc({ lit, boostRef }: { lit: boolean; boostRef?: { current: numbe
   })
 
   return (
-    <group ref={group} position={[-3.5, 2.3, -5.5]}>
-      <sprite scale={[1.5, 1.5, 1]}>
+    <group ref={group} position={[MOON_BASE.x, MOON_BASE.y, MOON_BASE.z]}>
+      <sprite scale={[MOON_BASE_SCALE, MOON_BASE_SCALE, 1]}>
         <spriteMaterial ref={material} map={texture} transparent opacity={0} depthWrite={false} />
       </sprite>
     </group>

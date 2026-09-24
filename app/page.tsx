@@ -486,6 +486,17 @@ export default function MvpPage() {
             "radial-gradient(ellipse 75% 62% at 50% 42%, #101B30 0%, #0A1322 55%, #060B16 100%)",
         }}
       />
+      {/* frosted grain — one static turbulence layer, deepens the night */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage:
+            "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E\")",
+          opacity: 0.05,
+          mixBlendMode: "soft-light",
+        }}
+      />
       {/* sparse stars */}
       <div aria-hidden="true" className="absolute inset-0">
         {STARS.map((st, i) => (
@@ -593,9 +604,8 @@ export default function MvpPage() {
       {/* ---------------- FINISHED (own lamp & shared lamp) ---------------- */}
       {stage === "finished" && (shared || song) && (
         <>
-          <div className="pointer-events-none absolute inset-x-0 top-7 z-10 flex justify-center">
-            <span className="text-base text-[#E8E4DA]/55">☾</span>
-          </div>
+          {/* the warm moon itself now sits high in the 3D frame once lit —
+              the old ☾ glyph here would duplicate it */}
           <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center pb-[4vh] text-center">
             {shared && (
               <p className="text-[10px] tracking-[0.35em] text-[#E8E4DA]/40">朋友点亮的灯</p>
