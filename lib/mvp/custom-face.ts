@@ -67,6 +67,19 @@ export function writeCustomFace(face: StoredCustomFace): boolean {
   }
 }
 
+/** Remove the stored drawing (the preset faces are untouched — they are
+ *  baked assets and can never be deleted by the user). */
+export function clearCustomFace(): void {
+  volatileFace = null
+  const s = storage()
+  if (!s) return
+  try {
+    s.removeItem(KEY)
+  } catch {
+    // storage unavailable — the in-memory slot is already cleared
+  }
+}
+
 /** The FacePreset the rest of the app consumes (id "custom"). */
 export function customFacePreset(stored: StoredCustomFace): FacePreset {
   return {

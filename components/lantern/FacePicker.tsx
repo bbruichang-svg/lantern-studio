@@ -10,6 +10,8 @@ type FacePickerProps = {
   customFace?: FacePreset | null
   /** opens the hand-drawing board; omit to hide the entry (studio keeps DTZ-only) */
   onDraw?: () => void
+  /** deletes the stored hand-drawn face; omit to hide the delete affordance */
+  onDeleteCustom?: () => void
   /** "ink" = dark selection ring (studio) · "night" = light ring (night sky) */
   tone?: "ink" | "night"
 }
@@ -19,6 +21,7 @@ export default function FacePicker({
   onSelect,
   customFace,
   onDraw,
+  onDeleteCustom,
   tone = "ink",
 }: FacePickerProps) {
   const night = tone === "night"
@@ -56,28 +59,48 @@ export default function FacePicker({
         </button>
       )}
 
-      {/* the user's own drawing, when one exists */}
+      {/* the user's own drawing, when one exists — deletable (the preset
+          faces are fixed; only the personal slot can be removed) */}
       {customFace && (
-        <button
-          key={customFace.id}
-          type="button"
-          onClick={() => onSelect(customFace)}
-          aria-label={customFace.name}
-          title={customFace.name}
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full p-0.5 transition-all duration-200 ${ringCls(
-            selectedId === customFace.id,
-          )}`}
-        >
-          <span
-            className={`flex h-9 w-9 items-center justify-center overflow-hidden rounded-full ${
-              night ? "border border-white/20" : "border border-black/10"
-            }`}
-            style={{ backgroundColor: getColorById(customFace.colorId).base }}
+        <div key={customFace.id} className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => onSelect(customFace)}
+            aria-label={customFace.name}
+            title={customFace.name}
+            className={`flex h-11 w-11 items-center justify-center rounded-full p-0.5 transition-all duration-200 ${ringCls(
+              selectedId === customFace.id,
+            )}`}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={customFace.src} alt="" draggable={false} className="h-9 w-9 select-none" />
-          </span>
-        </button>
+            <span
+              className={`flex h-9 w-9 items-center justify-center overflow-hidden rounded-full ${
+                night ? "border border-white/20" : "border border-black/10"
+              }`}
+              style={{ backgroundColor: getColorById(customFace.colorId).base }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={customFace.src} alt="" draggable={false} className="h-9 w-9 select-none" />
+            </span>
+          </button>
+          {onDeleteCustom && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDeleteCustom()
+              }}
+              aria-label="删除手绘表情"
+              title="删除手绘表情"
+              className={`absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] leading-none transition-colors duration-200 ${
+                night
+                  ? "bg-[#0B1220] text-[#E8E4DA]/70 hover:bg-[#E03860] hover:text-white"
+                  : "bg-[#2A2622] text-white/80 hover:bg-[#E03860] hover:text-white"
+              }`}
+            >
+              ✕
+            </button>
+          )}
+        </div>
       )}
 
       {ALL_FACES.map((face) => {

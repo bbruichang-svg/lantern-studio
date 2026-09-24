@@ -97,15 +97,30 @@ export class LanternCanvas {
    * inscribed in the canvas) onto the planar face layer, then remap it
    * onto the lantern UV through the inverse orthographic projection.
    * No-op until the image is cached — callers await ensureFace(src).
+   *
+   * `inkColor` (a city's `line` colour) remaps every stroke to that
+   * colour while preserving alpha — including the anti-aliased edges —
+   * via a source-in fill. Faces and colours are chosen independently,
+   * so without this a dark-ink face would vanish on the ink-black
+   * cities (墨黑/墨夜); remapped, any face reads on any base exactly
+   * like the DTZ inverted designs do.
    */
-  setFaceImage(src: string | null): void {
+  setFaceImage(src: string | null, inkColor?: string): void {
     const sctx = this.facePlanarCanvas.getContext("2d", { willReadFrequently: true })
     if (!sctx) return
     sctx.setTransform(1, 0, 0, 1, 0, 0)
     sctx.clearRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE)
     if (src) {
       const img = getCachedFace(src)
-      if (img) sctx.drawImage(img, 0, 0, TEXTURE_SIZE, TEXTURE_SIZE)
+      if (img) {
+        sctx.drawImage(img, 0, 0, TEXTURE_SIZE, TEXTURE_SIZE)
+        if (inkColor) {
+          sctx.globalCompositeOperation = "source-in"
+          sctx.fillStyle = inkColor
+          sctx.fillRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE)
+          sctx.globalCompositeOperation = "source-over"
+        }
+      }
     }
     this.remapFaceLayer()
     this.composite()

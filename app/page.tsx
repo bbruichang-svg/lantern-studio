@@ -12,6 +12,7 @@ import { ensureFace, preloadAllFaces } from "@/lib/lantern/faces"
 import { pickSong, getSongById, type MvpSong } from "@/lib/mvp/songs"
 import { track } from "@/lib/mvp/analytics"
 import {
+  clearCustomFace,
   customFacePreset,
   readCustomFace,
   writeCustomFace,
@@ -214,6 +215,17 @@ export default function MvpPage() {
     },
     [],
   )
+
+  // delete the hand-drawn face — the personal slot only; preset faces are
+  // baked assets and stay fixed. If the drawing was on the lantern, fall
+  // back to the current city's default face.
+  const handleDeleteCustom = useCallback(() => {
+    clearCustomFace()
+    setCustomFace(null)
+    setFace((prev) => (prev?.id === "custom" ? getDefaultFace(colorId) : prev))
+    track("face_custom_deleted")
+    showToast("手绘表情已删除")
+  }, [colorId, showToast])
 
   // ---- 手绘表情 ----
   const openPainter = useCallback(() => {
@@ -543,6 +555,7 @@ export default function MvpPage() {
             onFaceSelect={handleFaceSelect}
             customFace={customFace}
             onDraw={openPainter}
+            onDeleteCustom={handleDeleteCustom}
             action={
               /* the CTA is a small wick flame — the fire itself invites the
                  click (hover brightens, click moves to the blessing step) */

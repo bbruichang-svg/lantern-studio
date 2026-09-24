@@ -103,11 +103,13 @@ export default function LanternModel({
 
   const targetBase = useMemo(() => new THREE.Color(color.base), [color.base])
   const targetGlow = useMemo(() => new THREE.Color(color.glow), [color.glow])
-  // warm-leaning tints so the lantern never glows in its own saturated hue
-  const emissiveTarget = useMemo(() => targetGlow.clone().lerp(WARM_LIGHT, 0.6), [targetGlow])
-  const lightTarget = useMemo(() => targetGlow.clone().lerp(WARM_LIGHT, 0.55), [targetGlow])
-  const haloTarget = useMemo(() => targetGlow.clone().lerp(WARM_LIGHT, 0.5), [targetGlow])
-  const transTarget = useMemo(() => targetGlow.clone().lerp(WARM_LIGHT, 0.7), [targetGlow])
+  // warm-leaning tints — tempered, not flattened: each city keeps most of
+  // its own hue once lit (the old 0.5-0.7 blends washed every colour into
+  // the same candle white, killing the palette identity)
+  const emissiveTarget = useMemo(() => targetGlow.clone().lerp(WARM_LIGHT, 0.3), [targetGlow])
+  const lightTarget = useMemo(() => targetGlow.clone().lerp(WARM_LIGHT, 0.25), [targetGlow])
+  const haloTarget = useMemo(() => targetGlow.clone().lerp(WARM_LIGHT, 0.2), [targetGlow])
+  const transTarget = useMemo(() => targetGlow.clone().lerp(WARM_LIGHT, 0.35), [targetGlow])
 
   // inject the thin-paper translucency term into the standard shader:
   // light from the internal bulb passes THROUGH the paper — direction is
@@ -185,7 +187,9 @@ export default function LanternModel({
     }
     let cancelled = false
     void ensureFace(src).then(() => {
-      if (!cancelled) lanternTexture.setFaceImage(src)
+      // remap the face's strokes to this city's line colour so any face
+      // stays readable on any base (dark ink would vanish on 墨黑/墨夜)
+      if (!cancelled) lanternTexture.setFaceImage(src, color.line)
     })
     // DEBUG: expose texture layers for inspection (remove before V2)
     if (typeof window !== "undefined") {
@@ -194,7 +198,7 @@ export default function LanternModel({
     return () => {
       cancelled = true
     }
-  }, [face, lanternTexture])
+  }, [face, lanternTexture, color.line])
 
   useEffect(() => {
     return () => {

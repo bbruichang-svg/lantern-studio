@@ -17,6 +17,7 @@ export type MvpEvent =
   | "face_draw_opened"
   | "face_draw_saved"
   | "face_draw_cancelled"
+  | "face_custom_deleted"
   | "light_clicked"
   | "light_hold_started"
   | "light_hold_completed"

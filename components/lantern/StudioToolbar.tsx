@@ -17,6 +17,8 @@ type StudioToolbarProps = {
   customFace?: FacePreset | null
   /** opens the hand-drawing board; omit to hide the draw entry */
   onDraw?: () => void
+  /** deletes the stored hand-drawn face; omit to hide the delete affordance */
+  onDeleteCustom?: () => void
   /** "ink" = dark text for bright backgrounds (studio) · "night" = light text for dark scenes */
   tone?: "ink" | "night"
   /** optional primary action rendered under the mode tabs (e.g. the MVP 点亮 button) */
@@ -32,6 +34,7 @@ export default function StudioToolbar({
   onFaceSelect,
   customFace,
   onDraw,
+  onDeleteCustom,
   tone = "ink",
   action,
 }: StudioToolbarProps) {
@@ -85,6 +88,7 @@ export default function StudioToolbar({
             onSelect={onFaceSelect}
             customFace={customFace}
             onDraw={onDraw}
+            onDeleteCustom={onDeleteCustom}
           />
         </div>
       </div>
