@@ -10,6 +10,8 @@ import AwakenedStars from "./AwakenedStars"
 import ReleaseGround from "./ReleaseGround"
 import ReleaseReflection from "./ReleaseReflection"
 import SoarController, { APEX_Y } from "./SoarController"
+import HangController, { HANG_LANTERN_POS } from "./HangController"
+import TreeBranch from "./TreeBranch"
 import type { FacePreset, LanternColor, LanternPhase, ReleaseStage } from "@/lib/lantern/types"
 
 type LanternSceneProps = {
@@ -39,6 +41,8 @@ type LanternSceneProps = {
   releaseStage?: ReleaseStage
   /** fired once when the soar timeline finishes (soar → apex) */
   onSoarComplete?: () => void
+  /** fired once when the hang timeline finishes (hang → dissolve) */
+  onHangComplete?: () => void
   /** fired once when the dissolve merge finishes (dissolve → memory) */
   onDissolveComplete?: () => void
 }
@@ -47,10 +51,16 @@ type LanternSceneProps = {
 function CaptureBridge({
   apiRef,
   targetY = 0,
+  targetX = 0,
+  targetZ = 0,
 }: {
   apiRef: { current: (() => string) | null }
-  /** vertical center of the lantern at capture time (apex framing on /release) */
+  /** vertical center of the lantern at capture time (apex/hang framing on /release) */
   targetY?: number
+  /** horizontal center of the lantern at capture time (hang framing on /release) */
+  targetX?: number
+  /** depth of the lantern at capture time (hang framing on /release) */
+  targetZ?: number
 }) {
   const gl = useThree((s) => s.gl)
   const scene = useThree((s) => s.scene)
@@ -67,8 +77,8 @@ function CaptureBridge({
       const aspect = cam.aspect
       const fill = Math.min(0.5635, 0.6125 * aspect) // lantern height / capture height
       const d = 1.1 / Math.tan((fill * cam.fov * Math.PI) / 360) + 1.06
-      cam.position.set(0, 0.55 + targetY, d)
-      cam.lookAt(0, targetY, 0)
+      cam.position.set(targetX, 0.55 + targetY, targetZ + d)
+      cam.lookAt(targetX, targetY, targetZ)
       gl.render(scene, cam)
       const url = gl.domElement.toDataURL("image/png")
       cam.position.copy(prevPos)
@@ -79,7 +89,7 @@ function CaptureBridge({
     return () => {
       apiRef.current = null
     }
-  }, [apiRef, gl, scene, camera, targetY])
+  }, [apiRef, gl, scene, camera, targetY, targetX, targetZ])
 
   return null
 }
@@ -262,14 +272,18 @@ function DissolveController({
   groupRef,
   glowRef,
   moonBoostRef,
+  hangPos,
   onComplete,
 }: {
   stage: ReleaseStage
   groupRef: React.RefObject<THREE.Group | null>
   glowRef: React.RefObject<THREE.Sprite | null>
   moonBoostRef: { current: number }
+  /** where the lantern rests when the merge starts (apex hover or hang point) */
+  hangPos?: { x: number; y: number; z: number }
   onComplete: () => void
 }) {
+  const start = hangPos ?? { x: 0, y: APEX_Y, z: 0 }
   const elapsed = useRef(0)
   const fired = useRef(false)
 
@@ -311,8 +325,13 @@ function DissolveController({
     const glow = glowRef.current
     if (glow) {
       glow.visible = true
-      // drift toward the moon's merge point (moon ends near [-1.0, 2.7, -2.1])
-      glow.position.set(-1.05 * s, APEX_Y + (2.72 - APEX_Y) * 0.5 * s, -2.1 * s)
+      // drift from the lantern's resting point toward the moon's merge point
+      // (moon ends near [-1.0, 2.7, -2.1])
+      glow.position.set(
+        start.x + (-1.05 - start.x) * s,
+        start.y + (2.72 - start.y) * s,
+        start.z + (-2.1 - start.z) * s,
+      )
       const sc = 0.5 + 2.3 * s
       glow.scale.set(sc, sc, 1)
       const mat = glow.material as THREE.SpriteMaterial
@@ -347,6 +366,7 @@ export default function LanternScene({
   onHoldCancel,
   releaseStage,
   onSoarComplete,
+  onHangComplete,
   onDissolveComplete,
 }: LanternSceneProps) {
   const resolvedEnv: "studio" | "nightDim" | "nightLit" =
@@ -416,6 +436,10 @@ export default function LanternScene({
           onHoldStart={onHoldStart}
           onHoldCancel={onHoldCancel}
         />
+        {/* steady state — warm motes rising from the top opening. Inside the
+            group so they follow the lantern through flight/hang/dissolve
+            (the group sits at the origin on every other route — no change). */}
+        <EmberRise active={phase === "finished"} tint={emberTint} paused={paused} />
       </group>
       {releaseStage && (
         <SoarController
@@ -425,25 +449,46 @@ export default function LanternScene({
           onSoarComplete={onSoarComplete}
         />
       )}
+      {/* 挂树终幕 — fly to the bare branch, catch, sway, then hand off */}
+      {releaseStage && (
+        <HangController stage={releaseStage} groupRef={lanternGroup} onHangComplete={onHangComplete} />
+      )}
+      {/* the bare branch reaches in for the hang finale and stays for the card */}
+      {releaseStage && (
+        <TreeBranch
+          reveal={
+            releaseStage === "hang" ||
+            releaseStage === "dissolve" ||
+            releaseStage === "memory" ||
+            releaseStage === "share"
+          }
+        />
+      )}
       {releaseStage && (
         <DissolveController
           stage={releaseStage}
           groupRef={lanternGroup}
           glowRef={dissolveGlowRef}
           moonBoostRef={moonBoostRef}
+          hangPos={HANG_LANTERN_POS}
           onComplete={onDissolveComplete ?? (() => {})}
         />
       )}
-      {/* steady state — warm motes rising from the top opening */}
-      <EmberRise active={phase === "finished"} tint={emberTint} paused={paused} />
       {/* the night sky answers: stars wake near→far once the lantern is lit */}
       <AwakenedStars active={lit} paused={paused} />
       <CameraFit pullBack={lit} />
-      {captureApiRef && <CaptureBridge apiRef={captureApiRef} targetY={releaseStage ? APEX_Y : 0} />}
+      {captureApiRef && (
+        <CaptureBridge
+          apiRef={captureApiRef}
+          targetY={releaseStage ? HANG_LANTERN_POS.y : 0}
+          targetX={releaseStage ? HANG_LANTERN_POS.x : 0}
+          targetZ={releaseStage ? HANG_LANTERN_POS.z : 0}
+        />
+      )}
 
       <OrbitControls
         makeDefault
-        enabled={releaseStage !== "soar"}
+        enabled={releaseStage !== "soar" && releaseStage !== "hang"}
         enablePan={false}
         enableDamping
         dampingFactor={0.06}

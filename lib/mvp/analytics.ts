@@ -37,6 +37,7 @@ export type MvpEvent =
   | "release_hold_short"
   | "release_hold_released"
   | "release_soar_complete"
+  | "release_hang"
   | "release_dissolve_complete"
   | "release_memory"
   | "release_song_clicked"

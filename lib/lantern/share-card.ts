@@ -25,6 +25,9 @@ export type ShareCardOptions = {
   blessing?: string
   /** formatted lantern number, e.g. "No.00042" */
   lanternNo?: string
+  /** headline above the lyric (default 「今晚，灯亮了。」 — the MVP light-up;
+   * the release route passes its hang-finale variant) */
+  headline?: string
   /** shown in the footer line (default 2026) */
   year?: number
   /**
@@ -205,7 +208,7 @@ async function composeCard(
   setLetterSpacing(ctx, 14)
   ctx.shadowColor = theme.warm
   ctx.shadowBlur = 26
-  ctx.fillText("今晚，灯亮了。", CARD_WIDTH / 2, headlineY)
+  ctx.fillText(options.headline ?? "今晚，灯亮了。", CARD_WIDTH / 2, headlineY)
   ctx.shadowBlur = 0
   setLetterSpacing(ctx, 0)
 

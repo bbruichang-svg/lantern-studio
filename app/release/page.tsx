@@ -99,7 +99,11 @@ export default function ReleasePage() {
   // soar uses "lighting" so the paper ignites while it lifts off the ground
   // (ignition and take-off are the same moment), then holds at full glow.
   const phase: LanternPhase =
-    stage === "apex" || stage === "dissolve" || stage === "memory" || stage === "share"
+    stage === "apex" ||
+    stage === "hang" ||
+    stage === "dissolve" ||
+    stage === "memory" ||
+    stage === "share"
       ? "finished"
       : stage === "soar"
         ? "lighting"
@@ -169,15 +173,22 @@ export default function ReleasePage() {
     track("release_soar_complete", { color: colorId })
   }, [colorId])
 
-  // apex → dissolve: a still beat at the moon-framed apex, then the lantern's
-  // light swells and merges into the moon (化月, 方案 §10)
+  // apex → hang: a still beat at the moon-framed apex, then the lantern
+  // flies to the bare branch and hangs there (挂树终幕) before 化月
   useEffect(() => {
     if (stage !== "apex") return
     const t = window.setTimeout(() => {
-      setStage("dissolve")
+      setStage("hang")
     }, APEX_HOLD_MS)
     return () => window.clearTimeout(t)
   }, [stage])
+
+  // hang → dissolve: the lantern has caught the branch and swayed; now its
+  // light swells and merges into the moon from the branch tip
+  const handleHangComplete = useCallback(() => {
+    setStage("dissolve")
+    track("release_hang", { color: colorId })
+  }, [colorId])
 
   const handleDissolveComplete = useCallback(() => {
     setStage("memory")
@@ -212,6 +223,7 @@ export default function ReleasePage() {
           moonLyric: song.moonLyric,
           blessing: blessing.trim(),
           lanternNo: formatNumber(litNo),
+          headline: "今晚，灯住进了树梢。",
           year: 2026,
         })
         if (cancelled) return
@@ -248,7 +260,7 @@ export default function ReleasePage() {
   const copyLanternLink = useCallback(async () => {
     const url = buildLanternUrl()
     const nav = typeof navigator !== "undefined" ? navigator : undefined
-    const text = blessing.trim() ? `我放了一盏灯：「${blessing.trim()}」` : "今晚，灯飞了。"
+    const text = blessing.trim() ? `我放了一盏灯：「${blessing.trim()}」` : "今晚，灯住进了树梢。"
     try {
       await nav?.clipboard?.writeText(`${text} ${url}`)
       showFeedback("链接已复制，去粘贴给朋友吧")
@@ -273,7 +285,7 @@ export default function ReleasePage() {
     const canvas = cardCanvasRef.current
     if (!canvas) return
     const nav = typeof navigator !== "undefined" ? navigator : undefined
-    const text = song ? `今晚，我放了一盏灯，听见《${song.title}》。` : "今晚，灯飞了。"
+    const text = song ? `今晚，我放了一盏灯，听见《${song.title}》。` : "今晚，灯住进了树梢。"
     const url = buildLanternUrl()
     const canShareFiles =
       !!nav &&
@@ -340,6 +352,7 @@ export default function ReleasePage() {
         onHoldCancel={handleHoldCancel}
         releaseStage={stage}
         onSoarComplete={handleSoarComplete}
+        onHangComplete={handleHangComplete}
         onDissolveComplete={handleDissolveComplete}
       />
 
@@ -456,8 +469,8 @@ export default function ReleasePage() {
         </div>
       )}
 
-      {/* ---------------- APEX / MEMORY — high & still, moon-framed */}
-      {(stage === "apex" || stage === "memory") && (
+      {/* ---------------- APEX / HANG / MEMORY — high & still, moon-framed */}
+      {(stage === "apex" || stage === "hang" || stage === "memory") && (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center pb-[4vh] text-center">
           <p
             className="text-[10px] tracking-[0.35em] text-[#E8E4DA]/40"
@@ -469,7 +482,7 @@ export default function ReleasePage() {
             className="mt-1 text-sm tracking-[0.42em] text-[#E8E4DA]/85"
             style={{ textShadow: "0 0 24px rgba(255,216,170,calc(var(--lantern-glow,0)*0.6))" }}
           >
-            今晚，灯飞了。
+            {stage === "apex" ? "今晚，灯飞了。" : "今晚，灯住进了树梢。"}
           </p>
           {sceneBlessing && (
             <p className="mt-3.5 max-w-[min(80vw,26em)] text-base leading-relaxed tracking-[0.06em] text-[#E8E4DA]/90">

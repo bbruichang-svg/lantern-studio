@@ -4,6 +4,7 @@ import { useRef } from "react"
 import * as THREE from "three"
 import { useFrame, useThree } from "@react-three/fiber"
 import type { ReleaseStage } from "@/lib/lantern/types"
+import { HANG_LANTERN_POS } from "./HangController"
 
 /**
  * Release-route flight timeline (self-written, same pattern as
@@ -89,13 +90,26 @@ export default function SoarController({
         fired.current = true
         onSoarComplete?.()
       }
-    } else if (stage === "apex" || stage === "dissolve" || stage === "memory" || stage === "share") {
-      // snapped states (share-link restore lands straight on apex): hold still
+    } else if (stage === "apex") {
+      // snapped state (share-link restore lands straight on apex): hold still
+      // at the apex hover — the branch only appears in the hang stage
       if (progressRef.current < 1) {
         progressRef.current = 1
         g.position.set(0, APEX_Y, 0)
         g.rotation.set(0, 0, 0)
         if (controls) controls.target.setY(APEX_Y * 0.72)
+      }
+    } else if (stage === "hang" || stage === "dissolve" || stage === "memory" || stage === "share") {
+      // post-flight states rest at the HANG position (safety net only — in
+      // the normal flow progressRef is already 1 by the time these stages
+      // run, and HangController drives the lantern during "hang"; without
+      // this branch "hang" would fall into the grounded else below and be
+      // yanked back to the ground origin every frame)
+      if (progressRef.current < 1) {
+        progressRef.current = 1
+        g.position.set(HANG_LANTERN_POS.x, HANG_LANTERN_POS.y, HANG_LANTERN_POS.z)
+        g.rotation.set(0, 0, 0)
+        if (controls) controls.target.set(-0.3, 2.0, 0)
       }
     } else {
       // grounded stages — make sure the lantern rests at origin
