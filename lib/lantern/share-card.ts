@@ -243,7 +243,7 @@ async function composeCard(
   setLetterSpacing(ctx, 6)
   const no = lanternNo && lanternNo.trim() ? lanternNo.trim() : null
   ctx.fillText(
-    no ? `${no} · 月下灯会 · ${year}` : `月下灯会 · ${year}`,
+    no ? `${no} · 月球下的人 · ${year}` : `月球下的人 · ${year}`,
     CARD_WIDTH / 2,
     CARD_HEIGHT * 0.9,
   )
