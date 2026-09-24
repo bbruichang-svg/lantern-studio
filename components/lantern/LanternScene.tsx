@@ -216,12 +216,12 @@ function makeMoonTexture(): THREE.CanvasTexture {
   return tex
 }
 
-/** ambient moon — a warm golden disc that LIVES high in the frame once the
- * lantern is lit (参考图构图: 枝横月面). During the dissolve merge it is the
- * destination the lantern's light flows into (boost 0→1, written by
- * DissolveController through moonBoostRef). */
-const MOON_BASE = { x: 0.55, y: 3.5, z: -4.5 }
-const MOON_BASE_SCALE = 1.7
+/** ambient moon — a small warm disc hanging high & clear of the branch
+ * (参考图2 枯枝垂星构图: moon separated, upper-right sky). During the
+ * dissolve merge it is the destination the lantern's light flows into
+ * (boost 0→1, written by DissolveController through moonBoostRef). */
+const MOON_BASE = { x: 0.6, y: 4.05, z: -4.5 }
+const MOON_BASE_SCALE = 0.75
 
 function MoonDisc({ lit, boostRef }: { lit: boolean; boostRef?: { current: number } }) {
   const texture = useMemo(() => makeMoonTexture(), [])
@@ -238,16 +238,18 @@ function MoonDisc({ lit, boostRef }: { lit: boolean; boostRef?: { current: numbe
       material.current.opacity += (o - material.current.opacity) * k
     }
     if (group.current) {
-      // resident high perch (portrait-frustum safe at z=-4.5); during the
-      // merge the moon leans IN toward the fixed merge end point — same
-      // DissolveController destination, expressed as boost interpolation.
-      const x = MOON_BASE.x - 1.6 * boost
-      const y = MOON_BASE.y - 0.78 * boost
+      // resident high perch, clear of the branch (portrait-frustum safe at
+      // z=-4.5: moon spans x 0.225→0.975, y 3.675→4.425); during the merge
+      // the moon leans IN toward the fixed merge end point — same
+      // DissolveController destination (-1.05, 2.72, -2.1), expressed as
+      // boost interpolation from the new base.
+      const x = MOON_BASE.x - 1.65 * boost
+      const y = MOON_BASE.y - 1.33 * boost
       const z = MOON_BASE.z + 2.4 * boost
       group.current.position.setX(group.current.position.x + (x - group.current.position.x) * k)
       group.current.position.setY(group.current.position.y + (y - group.current.position.y) * k)
       group.current.position.setZ(group.current.position.z + (z - group.current.position.z) * k)
-      const s = MOON_BASE_SCALE - 0.15 * boost
+      const s = MOON_BASE_SCALE + 0.45 * boost
       group.current.scale.setScalar(group.current.scale.x + (s - group.current.scale.x) * k)
       // dev probe: playwright reads this to debug the merge beat
       if (process.env.NODE_ENV !== "production") {

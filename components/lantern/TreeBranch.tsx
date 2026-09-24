@@ -7,25 +7,20 @@ import { ROPE_LEN } from "./HangController"
 import { makeStarTexture } from "./starTexture"
 
 /**
- * Glowing branch for the hang finale (挂树终幕) — v4, restyled after the
- * ethereal illustration references: the silhouette bough becomes a GLOWING
- * WHITE LINE drawing (inner core + soft additive halo tube), and the old
- * speck clusters are replaced by fine threads hanging four-point stars
- * from the twig tips. The lantern still hangs from the tip on a thin rope.
- *
- * Shape notes (geometry unchanged from v3):
- *  - the main bough tapers HARD (0.032 → 0.006) so the tip reads as a
- *    whip-thin twig, not a pipe; the curve dips then lifts gracefully;
- *  - ~12 secondary twigs (0.009 → 0.002) in varied attitudes, plus
- *    a few tertiary forks;
- *  - a thin rope (ROPE_LEN) drops from the tip; the lantern's top ring
- *    hangs at its end (see HangController — HANG_LANTERN_POS).
+ * Glowing branch for the hang finale (挂树终幕) — v4.1, hairline restyle.
+ * User feedback on v4: the bough read as a white glow-stick — too wide
+ * (radius + fat additive halo ≈ 荧光棒) with knuckle bulges at the joints
+ * and straight-stick twigs. This pass:
+ *  - radii cut ~55% across the board → the bough reads as a fine luminous
+ *    line drawing (白描) against the night, no halo twin needed;
+ *  - joint spheres matched to the adjacent tube radii (no bulges);
+ *  - twigs rebuilt as longer two-bend curves that droop or lift naturally
+ *    (no straight dashes), ~9 secondary + 4 hair-fine forks;
+ *  - hanging four-point stars re-anchored to the new twig tips.
  *
  * The hang tip stays at (-0.5, 3.05, -0.8) — HANG_POINT depends on it.
  * Do not move the last main-segment point.
  *
- * Layers: every tube gets a low-poly halo twin (radius ×3, additive) that
- * fades in a beat behind the core — "first the line, then the light".
  * Materials fade through refs (react-hooks/immutability safe).
  */
 
@@ -53,7 +48,7 @@ const MAIN_SEGS: Seg[] = [
       [-2.3, 2.44, -1.57],
       [-1.95, 2.62, -1.42],
     ],
-    r: 0.032,
+    r: 0.014,
   },
   {
     pts: [
@@ -61,7 +56,7 @@ const MAIN_SEGS: Seg[] = [
       [-1.62, 2.8, -1.28],
       [-1.3, 2.94, -1.12],
     ],
-    r: 0.024,
+    r: 0.011,
   },
   {
     // gentle dip — the bough settles under its own weight
@@ -70,7 +65,7 @@ const MAIN_SEGS: Seg[] = [
       [-1.05, 3.05, -1.0],
       [-0.82, 3.09, -0.9],
     ],
-    r: 0.016,
+    r: 0.0075,
   },
   {
     // final whip-thin reach to the hang tip
@@ -79,236 +74,196 @@ const MAIN_SEGS: Seg[] = [
       [-0.66, 3.1, -0.85],
       [-0.5, 3.05, -0.8],
     ],
-    r: 0.008,
+    r: 0.004,
   },
 ]
 
-// secondary twigs — varied attitudes along the bough (base → tip order).
-// radii run 0.009 → 0.002: fine enough to read as twigs, not pipes.
+// secondary twigs — v4.1: longer two-bend curves (droop or lift), never
+// straight dashes. Order: trunk → tip. Radii 0.0032 → 0.0015.
 const TWIGS: Seg[] = [
   {
-    // low lifting fork near the trunk
+    // low lifting fork near the trunk — rises with a soft backward bow
     pts: [
       [-1.95, 2.62, -1.42],
-      [-1.86, 2.78, -1.38],
-      [-1.8, 2.95, -1.34],
+      [-1.88, 2.76, -1.39],
+      [-1.87, 2.92, -1.38],
     ],
-    r: 0.009,
+    r: 0.0032,
   },
   {
-    // low drooper, hangs below the bough
+    // long drooper — hangs below the bough in a gravity arc
     pts: [
-      [-1.8, 2.68, -1.36],
-      [-1.74, 2.5, -1.33],
-      [-1.72, 2.34, -1.31],
+      [-1.82, 2.66, -1.38],
+      [-1.77, 2.52, -1.36],
+      [-1.64, 2.4, -1.32],
     ],
-    r: 0.007,
+    r: 0.0028,
   },
   {
-    // level reach forward
+    // level reach, sagging slightly mid-way
     pts: [
       [-1.6, 2.72, -1.3],
-      [-1.42, 2.82, -1.22],
-      [-1.24, 2.88, -1.14],
+      [-1.42, 2.76, -1.22],
+      [-1.24, 2.86, -1.14],
     ],
-    r: 0.008,
+    r: 0.003,
   },
   {
-    // lifting fork off the second joint — reaches high
+    // rising fork off the second joint — reaches high with a lean
     pts: [
       [-1.3, 2.94, -1.12],
-      [-1.2, 3.1, -1.08],
-      [-1.13, 3.28, -1.05],
+      [-1.22, 3.08, -1.09],
+      [-1.12, 3.26, -1.05],
     ],
-    r: 0.008,
+    r: 0.0028,
   },
   {
-    // back-thorn, points up-left away from the camera
+    // back twig — angles away from the camera with a gentle curl
     pts: [
       [-1.15, 2.98, -1.08],
-      [-1.26, 3.12, -1.14],
-      [-1.36, 3.22, -1.19],
+      [-1.28, 3.05, -1.13],
+      [-1.38, 3.1, -1.18],
     ],
-    r: 0.006,
+    r: 0.0022,
   },
   {
     // drooping curl below the mid section
     pts: [
-      [-1.0, 3.02, -0.98],
-      [-1.06, 2.86, -1.0],
-      [-1.16, 2.72, -1.04],
+      [-1.0, 3.03, -0.98],
+      [-1.05, 2.9, -1.0],
+      [-1.14, 2.74, -1.03],
     ],
-    r: 0.006,
+    r: 0.0022,
   },
   {
-    // forward level twig near the dip
+    // forward level twig near the dip, almost flat with a slow rise
     pts: [
       [-0.9, 3.08, -0.92],
-      [-0.76, 3.16, -0.87],
-      [-0.62, 3.2, -0.82],
+      [-0.78, 3.12, -0.88],
+      [-0.62, 3.14, -0.83],
     ],
-    r: 0.006,
+    r: 0.002,
   },
   {
-    // small upward flick just before the tip
+    // upward flick just before the tip
     pts: [
       [-0.72, 3.1, -0.86],
-      [-0.62, 3.2, -0.83],
-      [-0.56, 3.3, -0.81],
+      [-0.64, 3.18, -0.84],
+      [-0.56, 3.28, -0.81],
     ],
-    r: 0.0045,
+    r: 0.0018,
   },
   {
     // fine twig past the hang point, droops forward
     pts: [
-      [-0.55, 3.06, -0.81],
-      [-0.42, 3.02, -0.76],
-      [-0.3, 2.96, -0.72],
+      [-0.55, 3.05, -0.81],
+      [-0.44, 3.0, -0.77],
+      [-0.3, 2.94, -0.72],
     ],
-    r: 0.004,
-  },
-  {
-    // upward curl at the very tip section
-    pts: [
-      [-0.5, 3.05, -0.8],
-      [-0.4, 3.14, -0.77],
-      [-0.33, 3.24, -0.74],
-    ],
-    r: 0.0035,
-  },
-  {
-    // tiny forward dangle below the tip section
-    pts: [
-      [-0.62, 3.05, -0.83],
-      [-0.56, 2.94, -0.8],
-      [-0.52, 2.84, -0.79],
-    ],
-    r: 0.003,
-  },
-  {
-    // last fine hair past the tip
-    pts: [
-      [-0.48, 3.06, -0.8],
-      [-0.38, 3.1, -0.76],
-      [-0.28, 3.12, -0.72],
-    ],
-    r: 0.002,
+    r: 0.0015,
   },
 ]
 
-// tertiary forks — off the tips of some twigs, one bend each, hair-fine
+// tertiary forks — off the tips of some twigs, one bowed bend each, hair-fine
 const FORKS: Seg[] = [
   {
     pts: [
-      [-1.8, 2.95, -1.34],
-      [-1.72, 3.04, -1.3],
-      [-1.66, 3.1, -1.27],
+      [-1.87, 2.92, -1.38],
+      [-1.8, 2.99, -1.35],
+      [-1.72, 3.04, -1.32],
     ],
-    r: 0.0035,
+    r: 0.0012,
   },
   {
     pts: [
-      [-1.24, 2.88, -1.14],
-      [-1.14, 2.94, -1.1],
-      [-1.05, 2.98, -1.06],
+      [-1.24, 2.86, -1.14],
+      [-1.14, 2.9, -1.1],
+      [-1.05, 2.93, -1.07],
     ],
-    r: 0.003,
+    r: 0.001,
   },
   {
     pts: [
-      [-1.13, 3.28, -1.05],
-      [-1.05, 3.36, -1.02],
-      [-0.98, 3.4, -0.99],
+      [-1.12, 3.26, -1.05],
+      [-1.04, 3.33, -1.02],
+      [-0.96, 3.38, -0.99],
     ],
-    r: 0.003,
+    r: 0.001,
   },
   {
     pts: [
-      [-0.62, 3.2, -0.82],
-      [-0.52, 3.26, -0.79],
-      [-0.44, 3.3, -0.76],
+      [-0.56, 3.28, -0.81],
+      [-0.49, 3.32, -0.79],
+      [-0.42, 3.35, -0.77],
     ],
-    r: 0.002,
+    r: 0.0008,
   },
 ]
 
-// sphere joints where the tapering main segments meet — hides radius steps
+// sphere joints where the tapering main segments meet — radii matched to
+// the adjacent tube ends so the seam reads as continuous taper, no bulge
 const JOINTS: [V3, number][] = [
-  [[-1.95, 2.62, -1.42], 0.028],
-  [[-1.3, 2.94, -1.12], 0.02],
-  [[-0.82, 3.09, -0.9], 0.012],
+  [[-1.95, 2.62, -1.42], 0.012],
+  [[-1.3, 2.94, -1.12], 0.008],
+  [[-0.82, 3.09, -0.9], 0.0045],
 ]
 
 /**
  * Hanging stars — fine threads dropping four-point stars from twig/fork
- * tips. Anchors are hand-picked literals (portrait-frustum safe: x ≥ -1.2
- * stays on-screen at 390×844); order = wake order (tip stars first).
+ * tips. Anchors are hand-picked literals matched to the v4.1 twig ends
+ * (portrait-frustum safe, ≤ ~1.4 left of centre at 390×844); order =
+ * wake order (tip stars first).
  */
 const HANGING_STARS: { anchor: V3; len: number; scale: number; delay: number; swayPhase: number }[] = [
-  { anchor: [-0.56, 3.3, -0.81], len: 0.26, scale: 0.1, delay: 0.9, swayPhase: 0.0 },
-  { anchor: [-0.62, 3.2, -0.82], len: 0.18, scale: 0.07, delay: 1.1, swayPhase: 1.3 },
-  { anchor: [-0.44, 3.3, -0.76], len: 0.22, scale: 0.08, delay: 1.3, swayPhase: 2.1 },
-  { anchor: [-0.33, 3.24, -0.74], len: 0.15, scale: 0.06, delay: 1.5, swayPhase: 3.2 },
-  { anchor: [-0.28, 3.12, -0.72], len: 0.24, scale: 0.09, delay: 1.7, swayPhase: 4.0 },
-  { anchor: [-0.3, 2.96, -0.72], len: 0.14, scale: 0.06, delay: 1.9, swayPhase: 5.1 },
-  { anchor: [-0.52, 2.84, -0.79], len: 0.2, scale: 0.08, delay: 2.1, swayPhase: 0.8 },
-  { anchor: [-0.98, 3.4, -0.99], len: 0.28, scale: 0.11, delay: 2.3, swayPhase: 2.7 },
-  { anchor: [-1.13, 3.28, -1.05], len: 0.2, scale: 0.08, delay: 2.5, swayPhase: 3.9 },
-  { anchor: [-1.05, 2.98, -1.06], len: 0.16, scale: 0.06, delay: 2.7, swayPhase: 4.6 },
-  { anchor: [-1.36, 3.22, -1.19], len: 0.18, scale: 0.07, delay: 2.9, swayPhase: 5.6 },
+  { anchor: [-0.56, 3.28, -0.81], len: 0.26, scale: 0.1, delay: 0.9, swayPhase: 0.0 },
+  { anchor: [-0.62, 3.14, -0.83], len: 0.18, scale: 0.07, delay: 1.1, swayPhase: 1.3 },
+  { anchor: [-0.42, 3.35, -0.77], len: 0.22, scale: 0.08, delay: 1.3, swayPhase: 2.1 },
+  { anchor: [-0.3, 2.94, -0.72], len: 0.15, scale: 0.06, delay: 1.5, swayPhase: 3.2 },
+  { anchor: [-0.96, 3.38, -0.99], len: 0.24, scale: 0.09, delay: 1.7, swayPhase: 4.0 },
+  { anchor: [-1.05, 2.93, -1.07], len: 0.14, scale: 0.06, delay: 1.9, swayPhase: 5.1 },
+  { anchor: [-1.14, 2.74, -1.03], len: 0.2, scale: 0.08, delay: 2.1, swayPhase: 0.8 },
+  { anchor: [-1.38, 3.1, -1.18], len: 0.24, scale: 0.1, delay: 2.3, swayPhase: 2.7 },
+  { anchor: [-1.12, 3.26, -1.05], len: 0.2, scale: 0.08, delay: 2.5, swayPhase: 3.9 },
+  { anchor: [-1.64, 2.4, -1.32], len: 0.14, scale: 0.06, delay: 2.7, swayPhase: 4.6 },
+  { anchor: [-1.3, 2.94, -1.12], len: 0.2, scale: 0.07, delay: 2.9, swayPhase: 5.6 },
 ]
 
-/** core + low-poly halo twin from one curve (halo = radius ×3, additive) */
-function tubePair(pts: V3[], radius: number): { core: THREE.TubeGeometry; halo: THREE.TubeGeometry } {
+/** one CatmullRom tube per segment — hairline cores need no halo twin */
+function tube(pts: V3[], radius: number): THREE.TubeGeometry {
   const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)))
-  return {
-    core: new THREE.TubeGeometry(curve, 32, radius, 8, false),
-    halo: new THREE.TubeGeometry(curve, 16, radius * 3, 6, false),
-  }
+  return new THREE.TubeGeometry(curve, 32, radius, 8, false)
 }
 
 export default function TreeBranch({ reveal }: TreeBranchProps) {
-  // refs onto the shared materials — opacity is written through refs
+  // ref onto the shared material — opacity is written through the ref
   // because react-hooks/immutability forbids mutating useMemo'd objects
   const matRef = useRef<THREE.MeshBasicMaterial>(null)
-  const haloMatRef = useRef<THREE.MeshBasicMaterial>(null)
   const starMatRefs = useRef<(THREE.SpriteMaterial | null)[]>([])
   const starGroupRefs = useRef<(THREE.Group | null)[]>([])
   const clock = useRef(-1)
   const wasReveal = useRef(false)
 
-  // inner core: an emissive-looking flat white (glowing things don't need
-  // to be lit); the halo carries the actual glow
+  // inner core: an emissive-looking flat white — against the dark night a
+  // hairline reads as luminous on its own (v4's halo twin is gone)
   const material = useMemo(
     () => new THREE.MeshBasicMaterial({ color: "#F5F8FF", transparent: true, opacity: 0 }),
-    [],
-  )
-  const haloMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        color: "#FFFFFF",
-        transparent: true,
-        opacity: 0,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      }),
     [],
   )
   const starTexture = useMemo(() => makeStarTexture(), [])
 
   const geos = useMemo(
     () => ({
-      main: MAIN_SEGS.map((s) => tubePair(s.pts, s.r)),
-      twigs: TWIGS.map((t) => tubePair(t.pts, t.r)),
-      forks: FORKS.map((t) => tubePair(t.pts, t.r)),
+      main: MAIN_SEGS.map((s) => tube(s.pts, s.r)),
+      twigs: TWIGS.map((t) => tube(t.pts, t.r)),
+      forks: FORKS.map((t) => tube(t.pts, t.r)),
       joints: JOINTS.map(([, r]) => new THREE.SphereGeometry(r, 10, 8)),
       // thin rope dropping from the hang tip (lantern ring hangs at its end)
-      rope: new THREE.CylinderGeometry(0.0035, 0.0035, ROPE_LEN, 6),
-      ropeKnot: new THREE.SphereGeometry(0.009, 8, 6),
+      rope: new THREE.CylinderGeometry(0.0022, 0.0022, ROPE_LEN, 6),
+      ropeKnot: new THREE.SphereGeometry(0.006, 8, 6),
       // cap over the open tube end at the hang tip
-      cap: new THREE.SphereGeometry(0.008, 10, 8),
+      cap: new THREE.SphereGeometry(0.0045, 10, 8),
       // star threads (one thin cylinder per hanging star)
-      starLines: HANGING_STARS.map((s) => new THREE.CylinderGeometry(0.0015, 0.0015, s.len, 5)),
+      starLines: HANGING_STARS.map((s) => new THREE.CylinderGeometry(0.0012, 0.0012, s.len, 5)),
     }),
     [],
   )
@@ -316,37 +271,23 @@ export default function TreeBranch({ reveal }: TreeBranchProps) {
   useEffect(() => {
     return () => {
       material.dispose()
-      haloMaterial.dispose()
       starTexture.dispose()
-      geos.main.forEach((p) => {
-        p.core.dispose()
-        p.halo.dispose()
-      })
-      geos.twigs.forEach((p) => {
-        p.core.dispose()
-        p.halo.dispose()
-      })
-      geos.forks.forEach((p) => {
-        p.core.dispose()
-        p.halo.dispose()
-      })
+      geos.main.forEach((g) => g.dispose())
+      geos.twigs.forEach((g) => g.dispose())
+      geos.forks.forEach((g) => g.dispose())
       geos.joints.forEach((g) => g.dispose())
       geos.rope.dispose()
       geos.ropeKnot.dispose()
       geos.cap.dispose()
       geos.starLines.forEach((g) => g.dispose())
     }
-  }, [material, haloMaterial, starTexture, geos])
+  }, [material, starTexture, geos])
 
   useFrame((_, delta) => {
     const target = reveal ? 1 : 0
-    // core leads, halo follows a beat slower — "first the line, then the light"
     const kCore = 1 - Math.exp(-2.5 * Math.min(delta, 0.05))
-    const kHalo = 1 - Math.exp(-2.0 * Math.min(delta, 0.05))
     const mat = matRef.current
     if (mat) mat.opacity = mat.opacity + (target - mat.opacity) * kCore
-    const hm = haloMatRef.current
-    if (hm) hm.opacity = hm.opacity + (target * 0.15 - hm.opacity) * kHalo
 
     // hanging stars wake one by one after the branch starts revealing
     if (!reveal) {
@@ -375,7 +316,6 @@ export default function TreeBranch({ reveal }: TreeBranchProps) {
     if (process.env.NODE_ENV !== "production") {
       ;(window as unknown as Record<string, unknown>).__branch = {
         mat: mat?.opacity,
-        halo: hm?.opacity,
         star0: starMatRefs.current[0]?.opacity,
         starCount: HANGING_STARS.length,
       }
@@ -388,20 +328,20 @@ export default function TreeBranch({ reveal }: TreeBranchProps) {
   return (
     <group>
       {/* main bough segments — the first mesh carries the shared core ref */}
-      {geos.main.map((p, i) => (
-        <mesh key={`m${i}`} geometry={p.core}>
+      {geos.main.map((g, i) => (
+        <mesh key={`m${i}`} geometry={g}>
           <primitive object={material} attach="material" ref={i === 0 ? matRef : undefined} />
         </mesh>
       ))}
       {/* secondary twigs */}
-      {geos.twigs.map((p, i) => (
-        <mesh key={`t${i}`} geometry={p.core}>
+      {geos.twigs.map((g, i) => (
+        <mesh key={`t${i}`} geometry={g}>
           <primitive object={material} attach="material" />
         </mesh>
       ))}
       {/* tertiary forks */}
-      {geos.forks.map((p, i) => (
-        <mesh key={`f${i}`} geometry={p.core}>
+      {geos.forks.map((g, i) => (
+        <mesh key={`f${i}`} geometry={g}>
           <primitive object={material} attach="material" />
         </mesh>
       ))}
@@ -409,22 +349,6 @@ export default function TreeBranch({ reveal }: TreeBranchProps) {
       {geos.joints.map((g, i) => (
         <mesh key={`j${i}`} geometry={g}>
           <primitive object={material} attach="material" />
-        </mesh>
-      ))}
-      {/* soft additive halo twins — drawn after the core, never write depth */}
-      {geos.main.map((p, i) => (
-        <mesh key={`mh${i}`} geometry={p.halo} renderOrder={2}>
-          <primitive object={haloMaterial} attach="material" ref={i === 0 ? haloMatRef : undefined} />
-        </mesh>
-      ))}
-      {geos.twigs.map((p, i) => (
-        <mesh key={`th${i}`} geometry={p.halo} renderOrder={2}>
-          <primitive object={haloMaterial} attach="material" />
-        </mesh>
-      ))}
-      {geos.forks.map((p, i) => (
-        <mesh key={`fh${i}`} geometry={p.halo} renderOrder={2}>
-          <primitive object={haloMaterial} attach="material" />
         </mesh>
       ))}
       {/* rope from the hang tip + knot at its end */}
