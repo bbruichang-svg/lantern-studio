@@ -15,7 +15,7 @@ export const CARD_WIDTH = 1080
 export const CARD_HEIGHT = 1440
 
 /** Site printed on the card footer — keep in sync with the live deploy host. */
-export const SITE_HOST = "706a633b06b6493ebae2904886f9b6ef.app.workbuddy.host"
+export const SITE_HOST = "moonlantern.app.workbuddy.host"
 
 export type ShareCardOptions = {
   /** PNG data URL captured from the live WebGL canvas (frozen frame) */
