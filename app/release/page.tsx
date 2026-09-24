@@ -529,7 +529,9 @@ export default function ReleasePage() {
               「{sceneBlessing}」
             </p>
           )}
-          {sceneSong && (
+          {/* lyric lives once, at the very end (memory) — apex/hang stay
+              story-pure, no repetition */}
+          {stage === "memory" && sceneSong && (
             <>
               <p className="mt-3.5 max-w-[min(80vw,36em)] text-xs font-light leading-relaxed tracking-[0.2em] text-[#E8E4DA]/60">
                 &ldquo;{sceneSong.moonLyric}&rdquo;
