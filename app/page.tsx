@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import dynamic from "next/dynamic"
+import { useRouter } from "next/navigation"
 import StudioToolbar from "@/components/lantern/StudioToolbar"
 import ShareView from "@/components/lantern/ShareView"
 import FacePainter from "@/components/lantern/FacePainter"
@@ -69,6 +70,7 @@ function counterCopy(n: number): { main: string; sub: string } {
 }
 
 export default function MvpPage() {
+  const router = useRouter()
   const [stage, setStage] = useState<MvpStage>("landing")
   const [colorId, setColorId] = useState<string>("chengdu")
   // a city colour carries its own DTZ face — picking a colour brings its
@@ -178,6 +180,22 @@ export default function MvpPage() {
     setMode("color")
     setStage("make")
   }, [])
+
+  // narrative bridge — carry the lantern just made into the /release ritual.
+  // state rides the query string (release page pre-fills wish inputs);
+  // URLSearchParams handles the CJK blessing encoding. "custom" faces can't
+  // ride a URL (image data) — release falls back to this device's own drawing.
+  const handleGoRelease = useCallback(() => {
+    track("go_release_clicked")
+    const params = new URLSearchParams()
+    params.set("from", "make")
+    params.set("color", colorId)
+    const fid = face?.id
+    if (fid) params.set("face", fid)
+    const b = blessing.trim()
+    if (b) params.set("blessing", b)
+    router.push(`/release?${params.toString()}`)
+  }, [colorId, face, blessing, router])
 
   const handleColorSelect = useCallback((id: string) => {
     track("color_selected", { color: id })
@@ -619,6 +637,14 @@ export default function MvpPage() {
                       去听这首歌
                     </a>
                   )}
+                  {/* ghost secondary — bridges into the /release ritual */}
+                  <button
+                    type="button"
+                    onClick={handleGoRelease}
+                    className="rounded-full px-9 py-3 text-sm tracking-[0.3em] text-[#E8E4DA] outline outline-1 outline-[#E8E4DA]/40 transition-all duration-200 hover:bg-white/5 hover:outline-[#E8E4DA]/80"
+                  >
+                    带着它去放灯
+                  </button>
                   {/* lightweight share entry — thin text, no button card (spec §3) */}
                   <button
                     type="button"

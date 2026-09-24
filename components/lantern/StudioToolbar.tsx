@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import type { ReactNode } from "react"
 import ColorPicker from "./ColorPicker"
 import FacePicker from "./FacePicker"
@@ -35,6 +36,32 @@ export default function StudioToolbar({
   action,
 }: StudioToolbarProps) {
   const night = tone === "night"
+
+  // 「新」badge on the FACE tab — a first-visit hint toward the hand-drawing
+  // entry. Disappears once the FACE tab is opened; remembered via localStorage.
+  const [faceBadge, setFaceBadge] = useState(false)
+  useEffect(() => {
+    queueMicrotask(() => {
+      try {
+        if (!window.localStorage.getItem("moon.seenFaceBadge.v1")) setFaceBadge(true)
+      } catch {
+        // storage unavailable (private mode) — simply skip the badge
+      }
+    })
+  }, [])
+
+  const handleTabClick = (value: StudioMode) => {
+    if (value === "face") {
+      setFaceBadge(false)
+      try {
+        window.localStorage.setItem("moon.seenFaceBadge.v1", "1")
+      } catch {
+        // storage unavailable — the badge just reappears next visit
+      }
+    }
+    onModeChange(mode === value ? null : value)
+  }
+
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center pb-3 sm:pb-4">
       {/* expanding panel — intentionally cardless and compact: one thin
@@ -73,8 +100,8 @@ export default function StudioToolbar({
           <button
             key={value}
             type="button"
-            onClick={() => onModeChange(mode === value ? null : value)}
-            className={`rounded-full px-4 py-1.5 text-[10px] tracking-[0.2em] transition-all duration-200 ${
+            onClick={() => handleTabClick(value)}
+            className={`relative rounded-full px-4 py-1.5 text-[10px] tracking-[0.2em] transition-all duration-200 ${
               night
                 ? mode === value
                   ? "bg-white/10 text-[#E8E4DA] outline outline-1 outline-[#E8E4DA]/50"
@@ -85,6 +112,11 @@ export default function StudioToolbar({
             }`}
           >
             {label}
+            {value === "face" && faceBadge && (
+              <span className="absolute -right-1.5 -top-1.5 rounded-full bg-[#E8944A] px-[5px] py-px text-[8px] font-medium leading-none text-[#0B1220]">
+                新
+              </span>
+            )}
           </button>
         ))}
       </div>

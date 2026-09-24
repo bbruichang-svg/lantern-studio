@@ -23,6 +23,7 @@ export type MvpEvent =
   | "light_hold_cancelled"
   | "light_completed"
   | "song_clicked"
+  | "go_release_clicked"
   | "share_clicked"
   | "share_link_opened"
   | "share_opened"
@@ -31,6 +32,7 @@ export type MvpEvent =
   | "share_closed"
   // release (放灯) route — separate funnel from the root MVP
   | "release_page_view"
+  | "release_prefilled"
   | "release_start"
   | "release_charge_entered"
   | "release_hold_started"

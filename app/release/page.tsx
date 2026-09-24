@@ -5,7 +5,7 @@ import dynamic from "next/dynamic"
 import ShareView from "@/components/lantern/ShareView"
 import { getColorById, getDefaultFace, getFaceById } from "@/lib/lantern/colors"
 import { renderShareCard } from "@/lib/lantern/share-card"
-import { preloadAllFaces } from "@/lib/lantern/faces"
+import { ensureFace, preloadAllFaces } from "@/lib/lantern/faces"
 import { pickSong, songLink, getSongById, type MvpSong } from "@/lib/mvp/songs"
 import { track } from "@/lib/mvp/analytics"
 import {
@@ -66,14 +66,44 @@ export default function ReleasePage() {
     track("release_page_view")
     // share-link restore — same one-shot microtask pattern as the root MVP
     queueMicrotask(() => {
-      const payload = readLanternFromSearch(window.location.search)
+      const search = window.location.search
+      const payload = readLanternFromSearch(search)
       if (payload) {
         track("release_share_opened")
         setShared(payload)
         const s = getSongById(payload.s)
         if (s) setSong(s)
         setStage("apex")
+        return
       }
+      // entry bridge from the MVP finished step (?from=make&color=&face=&blessing=)
+      // — pre-fills the wish inputs but keeps the ritual intact (arrive → wish
+      // → charge). "custom" faces can't ride a URL (image data), so they fall
+      // back to THIS device's own drawing, then to the city default.
+      const params = new URLSearchParams(search)
+      if (params.get("from") !== "make") return
+      const c = params.get("color")
+      if (c && getColorById(c).id === c) setColorId(c)
+      const f = params.get("face")
+      if (f === "custom") {
+        const stored = readCustomFace()
+        if (stored) {
+          const cf = customFacePreset(stored)
+          setFace(cf)
+          setColorId(cf.colorId)
+          void ensureFace(cf.src)
+        }
+      } else if (f) {
+        const preset = getFaceById(f)
+        if (preset) {
+          setFace(preset)
+          setColorId(preset.colorId)
+        }
+      }
+      const b = params.get("blessing")
+      if (b && b.length <= BLESSING_MAX && isBlessingAllowed(b)) setBlessing(b)
+      if (c || f || b) track("release_prefilled")
+      window.history.replaceState(null, "", window.location.pathname)
     })
   }, [])
 
