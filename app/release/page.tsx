@@ -509,8 +509,10 @@ export default function ReleasePage() {
         </div>
       )}
 
-      {/* ---------------- APEX / HANG / MEMORY — high & still, moon-framed */}
-      {(stage === "apex" || stage === "hang" || stage === "memory") && (
+      {/* ---------------- MEMORY — the one moment the story speaks: number,
+          headline, blessing, lyric and buttons, all at once, at the very end.
+          apex / hang / dissolve stay story-pure — no repeating text. */}
+      {stage === "memory" && (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center pb-[4vh] text-center">
           <p
             className="text-[10px] tracking-[0.35em] text-[#E8E4DA]/40"
@@ -522,16 +524,16 @@ export default function ReleasePage() {
             className="mt-1 text-sm tracking-[0.42em] text-[#E8E4DA]/85"
             style={{ textShadow: "0 0 24px rgba(255,216,170,calc(var(--lantern-glow,0)*0.6))" }}
           >
-            {stage === "apex" ? "今晚，灯飞了。" : "今晚，灯住进了树梢。"}
+            今晚，灯住进了树梢。
           </p>
           {sceneBlessing && (
             <p className="mt-3.5 max-w-[min(80vw,26em)] text-base leading-relaxed tracking-[0.06em] text-[#E8E4DA]/90">
               「{sceneBlessing}」
             </p>
           )}
-          {/* lyric lives once, at the very end (memory) — apex/hang stay
-              story-pure, no repetition */}
-          {stage === "memory" && sceneSong && (
+          {/* the whole block is memory-only now — the plain sceneSong check
+              suffices */}
+          {sceneSong && (
             <>
               <p className="mt-3.5 max-w-[min(80vw,36em)] text-xs font-light leading-relaxed tracking-[0.2em] text-[#E8E4DA]/60">
                 &ldquo;{sceneSong.moonLyric}&rdquo;
