@@ -9,7 +9,7 @@ import FacePainter from "@/components/lantern/FacePainter"
 import { getColorById, getDefaultFace, getFaceById } from "@/lib/lantern/colors"
 import { renderShareCard } from "@/lib/lantern/share-card"
 import { ensureFace, preloadAllFaces } from "@/lib/lantern/faces"
-import { pickSong, songLink, getSongById, type MvpSong } from "@/lib/mvp/songs"
+import { pickSong, getSongById, type MvpSong } from "@/lib/mvp/songs"
 import { track } from "@/lib/mvp/analytics"
 import {
   customFacePreset,
@@ -60,6 +60,9 @@ const STARS: readonly { left: string; top: string; s: number; o: number }[] = [
 
 /** matches LanternLighting.LIGHTING_DURATION (2.8s) — spec §7 timeline */
 const LIGHTING_MS = 2800
+
+/** finished stillness ("今晚，灯亮了。") before auto-advancing into /release */
+const FINISHED_HOLD_MS = 3000
 
 /** 首页计数四档文案 — 本机口径，数字永远真实（PRD §7） */
 function counterCopy(n: number): { main: string; sub: string } {
@@ -185,8 +188,7 @@ export default function MvpPage() {
   // state rides the query string (release page pre-fills wish inputs);
   // URLSearchParams handles the CJK blessing encoding. "custom" faces can't
   // ride a URL (image data) — release falls back to this device's own drawing.
-  const handleGoRelease = useCallback(() => {
-    track("go_release_clicked")
+  const releaseQuery = useCallback(() => {
     const params = new URLSearchParams()
     params.set("from", "make")
     params.set("color", colorId)
@@ -194,8 +196,8 @@ export default function MvpPage() {
     if (fid) params.set("face", fid)
     const b = blessing.trim()
     if (b) params.set("blessing", b)
-    router.push(`/release?${params.toString()}`)
-  }, [colorId, face, blessing, router])
+    return `/release?${params.toString()}`
+  }, [colorId, face, blessing])
 
   const handleColorSelect = useCallback((id: string) => {
     track("color_selected", { color: id })
@@ -312,13 +314,22 @@ export default function MvpPage() {
     return () => window.clearTimeout(timer)
   }, [stage, colorId])
 
+  // seamless bridge: after the finished stillness ("今晚，灯亮了。") the flow
+  // auto-advances into the /release ritual — wish page pre-filled, no second
+  // arrival gate. replace() so Back never lands on the stillness frame.
+  useEffect(() => {
+    if (stage !== "finished" || shared) return
+    const timer = window.setTimeout(() => {
+      track("light_auto_release", { color: colorId })
+      router.replace(releaseQuery())
+    }, FINISHED_HOLD_MS)
+    return () => window.clearTimeout(timer)
+  }, [stage, shared, colorId, releaseQuery, router])
+
   // ---- share card flow (spec: freeze → capture → restore) ----
-  const openShare = useCallback(() => {
-    // share_clicked kept for backwards compatibility with the original entry
-    track("share_clicked", { color: colorId })
-    track("share_opened")
-    setStage("share")
-  }, [colorId])
+  // NOTE: the "分享我的灯笼" entry was removed when finished became an
+  // auto-advancing stillness — sharing now lives at the end of the /release
+  // ritual. The share-stage render below stays for the upcoming lamp album.
 
   const closeShare = useCallback(() => {
     track("share_closed")
@@ -616,7 +627,10 @@ export default function MvpPage() {
               </p>
             )}
             <div className="pointer-events-auto mt-6 flex flex-col items-center gap-3">
-              {shared ? (
+              {/* own lamp: no buttons — the stillness auto-advances into
+                  /release after FINISHED_HOLD_MS; sharing happens at the end
+                  of that ritual */}
+              {shared && (
                 <button
                   type="button"
                   onClick={handleRelight}
@@ -624,36 +638,6 @@ export default function MvpPage() {
                 >
                   我也点一盏
                 </button>
-              ) : (
-                <>
-                  {song && (
-                    <a
-                      href={songLink(song)}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={() => track("song_clicked", { song: song.title })}
-                      className="rounded-full bg-[#E8E4DA] px-9 py-3 text-sm tracking-[0.3em] text-[#0B1220] transition-colors duration-200 hover:bg-white"
-                    >
-                      去听这首歌
-                    </a>
-                  )}
-                  {/* ghost secondary — bridges into the /release ritual */}
-                  <button
-                    type="button"
-                    onClick={handleGoRelease}
-                    className="rounded-full px-9 py-3 text-sm tracking-[0.3em] text-[#E8E4DA] outline outline-1 outline-[#E8E4DA]/40 transition-all duration-200 hover:bg-white/5 hover:outline-[#E8E4DA]/80"
-                  >
-                    带着它去放灯
-                  </button>
-                  {/* lightweight share entry — thin text, no button card (spec §3) */}
-                  <button
-                    type="button"
-                    onClick={openShare}
-                    className="text-[11px] tracking-[0.32em] text-[#E8E4DA]/55 underline decoration-[#E8E4DA]/20 underline-offset-8 transition-colors duration-200 hover:text-[#E8E4DA] hover:decoration-[#E8E4DA]/60"
-                  >
-                    分享我的灯笼
-                  </button>
-                </>
               )}
             </div>
           </div>

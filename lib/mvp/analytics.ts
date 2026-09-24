@@ -22,6 +22,7 @@ export type MvpEvent =
   | "light_hold_completed"
   | "light_hold_cancelled"
   | "light_completed"
+  | "light_auto_release"
   | "song_clicked"
   | "go_release_clicked"
   | "share_clicked"

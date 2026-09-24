@@ -22,7 +22,7 @@ async function runFlow(viewport, tag) {
   p.on("pageerror", (e) => errors.push("pageerror: " + e.message))
   const out = { tag, badge: {}, tracks: {}, url: "", wishInput: "", errors: [] }
 
-  // ---- Phase A: full MVP flow → finished → bridge → release prefill ----
+  // ---- Phase A: make → light → finished stillness → auto /release?from=make ----
   await p.goto("http://127.0.0.1:3000/", { waitUntil: "load", timeout: 180000 })
   await p.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {})
   await p.waitForTimeout(5000)
@@ -51,37 +51,34 @@ async function runFlow(viewport, tag) {
     .isVisible()
     .catch(() => false)
 
-  // wick CTA → blessing
+  // wick CTA → blessing; write, then light
   await p.locator("button[aria-label='下一步：写祝福']").first().click()
   await p.waitForTimeout(1500)
   await p.locator("input").first().fill("月圆人团圆")
   await p.screenshot({ path: `D:\\Rui\\moon\\entry_${tag}_2_blessing.png` })
-
-  // light the lantern via the explicit CTA (the hold gesture is the same flow)
   await p.locator("button", { hasText: "点亮这盏灯" }).first().click()
-  // lighting 2.8s → finished
-  await p.waitForTimeout(3800)
-
-  const goBtn = p.locator("button", { hasText: "带着它去放灯" }).first()
-  out.badge.goBtnVisible = await goBtn.isVisible().catch(() => false)
-  await p.screenshot({ path: `D:\\Rui\\moon\\entry_${tag}_3_finished.png` })
-
-  await goBtn.click()
-  await p.waitForLoadState("networkidle", { timeout: 60000 }).catch(() => {})
-  await p.waitForTimeout(6000)
+  // lighting 2.8s → finished stillness 3s → auto router.replace into /release
+  await p.waitForURL("**/release/**", { timeout: 12000 })
   out.url = p.url()
+  await p.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {})
+  await p.waitForTimeout(5000)
 
-  // arrive → wish; blessing input should carry the prefill
-  await p.locator("button", { hasText: "ENTER" }).first().click()
-  await p.waitForTimeout(1500)
+  // no second arrival gate — straight to the pre-filled wish page
   out.wishInput = await p.locator("input").first().inputValue().catch(() => "")
-  await p.screenshot({ path: `D:\\Rui\\moon\\entry_${tag}_4_wish.png` })
+  out.stillnessHeadline = await p
+    .locator("p", { hasText: "今晚，灯亮了。" })
+    .first()
+    .isVisible()
+    .catch(() => false)
+  await p.screenshot({ path: `D:\\Rui\\moon\\entry_${tag}_3_wish.png` })
 
   out.tracks.goRelease = tracks.some((t) => t.includes("go_release_clicked"))
+  out.tracks.lightAutoRelease = tracks.some((t) => t.includes("light_auto_release"))
   out.tracks.releasePrefilled = tracks.some((t) => t.includes("release_prefilled"))
   out.tracks.releaseStart = tracks.some((t) => t.includes("release_start"))
+  out.tracks.songClicked = tracks.some((t) => t.includes("song_clicked"))
 
-  // ---- Phase B: direct URL tolerance (custom face w/o drawing, colour, blessing) ----
+  // ---- Phase B: direct URL tolerance — lands on wish, no ENTER gate ----
   const p2 = await ctx.newPage()
   const errors2 = []
   p2.on("console", (m) => {
@@ -94,11 +91,9 @@ async function runFlow(viewport, tag) {
   )
   await p2.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {})
   await p2.waitForTimeout(6000)
-  await p2.locator("button", { hasText: "ENTER" }).first().click()
-  await p2.waitForTimeout(1500)
   out.directInput = await p2.locator("input").first().inputValue().catch(() => "")
   out.directUrlClean = !p2.url().includes("from=make")
-  await p2.screenshot({ path: `D:\\Rui\\moon\\entry_${tag}_5_direct.png` })
+  await p2.screenshot({ path: `D:\\Rui\\moon\\entry_${tag}_4_direct.png` })
   out.errors = errors.concat(errors2)
 
   await b.close()

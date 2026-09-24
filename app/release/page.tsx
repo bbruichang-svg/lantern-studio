@@ -77,9 +77,11 @@ export default function ReleasePage() {
         return
       }
       // entry bridge from the MVP finished step (?from=make&color=&face=&blessing=)
-      // — pre-fills the wish inputs but keeps the ritual intact (arrive → wish
-      // → charge). "custom" faces can't ride a URL (image data), so they fall
-      // back to THIS device's own drawing, then to the city default.
+      // — the make→release flow is one continuous ritual now: skip the arrive
+      // gate and land straight on the wish page with the inputs pre-filled
+      // (one tap on 蓄力放灯 confirms). "custom" faces can't ride a URL
+      // (image data), so they fall back to THIS device's own drawing, then to
+      // the city default.
       const params = new URLSearchParams(search)
       if (params.get("from") !== "make") return
       const c = params.get("color")
@@ -102,7 +104,12 @@ export default function ReleasePage() {
       }
       const b = params.get("blessing")
       if (b && b.length <= BLESSING_MAX && isBlessingAllowed(b)) setBlessing(b)
-      if (c || f || b) track("release_prefilled")
+      if (c || f || b) {
+        track("release_prefilled")
+        // keep the funnel metric — handleEnter never fires on this path
+        track("release_start")
+        setStage("wish")
+      }
       window.history.replaceState(null, "", window.location.pathname)
     })
   }, [])
