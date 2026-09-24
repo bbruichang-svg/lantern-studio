@@ -624,7 +624,7 @@ export default function MvpPage() {
                 stage of /release (repeating it here made blessing+lyric show
                 up twice in one ritual); the shared view has no release ritual
                 so it keeps the lyric here */}
-            {!shared && sceneSong && (
+            {shared && sceneSong && (
               <>
                 <p className="animate-lyric mt-3.5 max-w-[min(80vw,36em)] text-xs font-light leading-relaxed tracking-[0.2em] text-[#E8E4DA]/60">
                   “{sceneSong.moonLyric}”
