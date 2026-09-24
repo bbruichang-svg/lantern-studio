@@ -588,7 +588,7 @@ export default function ReleasePage() {
       )}
 
       <p className="pointer-events-none absolute bottom-2.5 left-4 z-20 text-[9px] tracking-[0.2em] text-[#E8E4DA]/25">
-        非官方粉丝二创 · 图案素材：大头仔 DTZ
+        LANTERN © 2026 · Fan-made · 致敬陈奕迅 · 纯属娱乐  Design by Be Water.
       </p>
     </main>
   )
