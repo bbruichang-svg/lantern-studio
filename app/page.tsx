@@ -607,24 +607,25 @@ export default function MvpPage() {
                 「{sceneBlessing}」
               </p>
             )}
-            {/* the moon line — rises out of the night after the light settles */}
-            {sceneSong && (
-              <p className="animate-lyric mt-3.5 max-w-[min(80vw,36em)] text-xs font-light leading-relaxed tracking-[0.2em] text-[#E8E4DA]/60">
-                “{sceneSong.moonLyric}”
-              </p>
-            )}
-            {sceneSong && (
-              <p
-                className="mt-3 text-xl font-light tracking-[0.18em]"
-                style={{ textShadow: "0 0 30px rgba(255,216,170,calc(var(--lantern-glow,0)*0.45))" }}
-              >
-                《{sceneSong.title}》
-              </p>
-            )}
-            {sceneSong && (
-              <p className="mt-1.5 text-[11px] tracking-[0.3em] text-[#E8E4DA]/50">
-                {sceneSong.artist}
-              </p>
+            {/* the moon line — own lamp: the lyric lives once, at the memory
+                stage of /release (repeating it here made blessing+lyric show
+                up twice in one ritual); the shared view has no release ritual
+                so it keeps the lyric here */}
+            {!shared && sceneSong && (
+              <>
+                <p className="animate-lyric mt-3.5 max-w-[min(80vw,36em)] text-xs font-light leading-relaxed tracking-[0.2em] text-[#E8E4DA]/60">
+                  “{sceneSong.moonLyric}”
+                </p>
+                <p
+                  className="mt-3 text-xl font-light tracking-[0.18em]"
+                  style={{ textShadow: "0 0 30px rgba(255,216,170,calc(var(--lantern-glow,0)*0.45))" }}
+                >
+                  《{sceneSong.title}》
+                </p>
+                <p className="mt-1.5 text-[11px] tracking-[0.3em] text-[#E8E4DA]/50">
+                  {sceneSong.artist}
+                </p>
+              </>
             )}
             <div className="pointer-events-auto mt-6 flex flex-col items-center gap-3">
               {/* own lamp: no buttons — the stillness auto-advances into

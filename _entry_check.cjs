@@ -20,7 +20,7 @@ async function runFlow(viewport, tag) {
     if (m.type() === "info" && m.text().includes("[track]")) tracks.push(m.text())
   })
   p.on("pageerror", (e) => errors.push("pageerror: " + e.message))
-  const out = { tag, badge: {}, tracks: {}, url: "", wishInput: "", errors: [] }
+  const out = { tag, badge: {}, tracks: {}, url: "", chargeHint: false, directChargeHint: false, errors: [] }
 
   // ---- Phase A: make → light → finished stillness → auto /release?from=make ----
   await p.goto("http://127.0.0.1:3000/", { waitUntil: "load", timeout: 180000 })
@@ -63,22 +63,23 @@ async function runFlow(viewport, tag) {
   await p.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {})
   await p.waitForTimeout(5000)
 
-  // no second arrival gate — straight to the pre-filled wish page
-  out.wishInput = await p.locator("input").first().inputValue().catch(() => "")
-  out.stillnessHeadline = await p
-    .locator("p", { hasText: "今晚，灯亮了。" })
+  // no second arrival gate and no wish page — blessing pre-filled during the
+  // make ritual, the flow lands straight on charge (hold the lantern)
+  out.chargeHint = await p
+    .locator("text=按住灯笼，蓄满放灯")
     .first()
     .isVisible()
     .catch(() => false)
-  await p.screenshot({ path: `D:\\Rui\\moon\\entry_${tag}_3_wish.png` })
+  await p.screenshot({ path: `D:\\Rui\\moon\\entry_${tag}_3_charge.png` })
 
   out.tracks.goRelease = tracks.some((t) => t.includes("go_release_clicked"))
   out.tracks.lightAutoRelease = tracks.some((t) => t.includes("light_auto_release"))
   out.tracks.releasePrefilled = tracks.some((t) => t.includes("release_prefilled"))
   out.tracks.releaseStart = tracks.some((t) => t.includes("release_start"))
+  out.tracks.releaseChargeEntered = tracks.some((t) => t.includes("release_charge_entered"))
   out.tracks.songClicked = tracks.some((t) => t.includes("song_clicked"))
 
-  // ---- Phase B: direct URL tolerance — lands on wish, no ENTER gate ----
+  // ---- Phase B: direct URL tolerance — lands straight on charge, no ENTER gate ----
   const p2 = await ctx.newPage()
   const errors2 = []
   p2.on("console", (m) => {
@@ -91,7 +92,11 @@ async function runFlow(viewport, tag) {
   )
   await p2.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => {})
   await p2.waitForTimeout(6000)
-  out.directInput = await p2.locator("input").first().inputValue().catch(() => "")
+  out.directChargeHint = await p2
+    .locator("text=按住灯笼，蓄满放灯")
+    .first()
+    .isVisible()
+    .catch(() => false)
   out.directUrlClean = !p2.url().includes("from=make")
   await p2.screenshot({ path: `D:\\Rui\\moon\\entry_${tag}_4_direct.png` })
   out.errors = errors.concat(errors2)

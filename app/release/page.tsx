@@ -6,7 +6,7 @@ import ShareView from "@/components/lantern/ShareView"
 import { getColorById, getDefaultFace, getFaceById } from "@/lib/lantern/colors"
 import { renderShareCard } from "@/lib/lantern/share-card"
 import { ensureFace, preloadAllFaces } from "@/lib/lantern/faces"
-import { pickSong, songLink, getSongById, type MvpSong } from "@/lib/mvp/songs"
+import { pickSong, getSongById, type MvpSong } from "@/lib/mvp/songs"
 import { track } from "@/lib/mvp/analytics"
 import {
   BLESSING_MAX,
@@ -108,7 +108,10 @@ export default function ReleasePage() {
         track("release_prefilled")
         // keep the funnel metric — handleEnter never fires on this path
         track("release_start")
-        setStage("wish")
+        // the blessing was already written during the make ritual — skip
+        // arrive AND wish, land straight on charge (hold the lantern to release)
+        setStage("charge")
+        track("release_charge_entered")
       }
       window.history.replaceState(null, "", window.location.pathname)
     })
@@ -552,26 +555,13 @@ export default function ReleasePage() {
                 我也放一盏
               </button>
             ) : (
-              <>
-                {sceneSong && (
-                  <a
-                    href={songLink(sceneSong)}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={() => track("release_song_clicked", { song: sceneSong.title })}
-                    className="rounded-full bg-[#E8E4DA] px-9 py-3 text-sm tracking-[0.3em] text-[#0B1220] transition-colors duration-200 hover:bg-white"
-                  >
-                    去听这首歌
-                  </a>
-                )}
-                <button
-                  type="button"
-                  onClick={openShare}
-                  className="text-[11px] tracking-[0.32em] text-[#E8E4DA]/55 underline decoration-[#E8E4DA]/20 underline-offset-8 transition-colors duration-200 hover:text-[#E8E4DA] hover:decoration-[#E8E4DA]/60"
-                >
-                  分享这盏灯
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={openShare}
+                className="text-[11px] tracking-[0.32em] text-[#E8E4DA]/55 underline decoration-[#E8E4DA]/20 underline-offset-8 transition-colors duration-200 hover:text-[#E8E4DA] hover:decoration-[#E8E4DA]/60"
+              >
+                分享这盏灯
+              </button>
             )}
           </div>
         </div>
