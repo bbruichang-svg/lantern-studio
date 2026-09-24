@@ -18,20 +18,24 @@ import { BODY_TOP_Y, RING_CAP_HEIGHT } from "@/lib/lantern/geometry"
  *                       with a soft "settle" dip in the last 15%
  *   B  pendulum  2.7s   rigid swing around the tip: θ = θ₀·cos(ωτ)·e^(−λτ)
  *
- * The lantern's top ring (local y ≈ 1.0817) hangs on the tip, so the
- * group position = tip + R(θ)·(0, −HANG_LEN, 0) and rotation.z = θ.
+ * The lantern's top ring hangs on a thin rope below the tip, so the
+ * group position = tip + R(θ)·(0, −HANG_RADIUS, 0) and rotation.z = θ.
  */
 
 /** branch tip in world coords (TreeBranch's last main-branch point) */
 export const HANG_POINT = { x: -0.5, y: 3.05, z: -0.8 }
 /** distance from group origin (lantern centre) down to the top ring */
 export const HANG_LEN = BODY_TOP_Y + RING_CAP_HEIGHT // ≈ 1.0817
-/** where the lantern GROUP rests while hung (top ring on the tip) */
+/** thin rope from the branch tip down to the lantern's top ring */
+export const ROPE_LEN = 0.35
+/** full pendulum radius: ring hangs at the rope's end, below the tip */
+export const HANG_RADIUS = HANG_LEN + ROPE_LEN // ≈ 1.4317
+/** where the lantern GROUP rests while hung (top ring on the rope end) */
 export const HANG_LANTERN_POS = {
   x: HANG_POINT.x,
-  y: HANG_POINT.y - HANG_LEN,
+  y: HANG_POINT.y - HANG_RADIUS,
   z: HANG_POINT.z,
-} // ≈ (-0.5, 1.9683, -0.8)
+} // ≈ (-0.5, 1.6183, -0.8)
 
 const FLIGHT_S = 1.8
 const SWAY_S = 2.7
@@ -45,8 +49,8 @@ const LAMBDA = 0.3 // decay: amplitude ≈ 0.029 (1.7°) at hand-off to dissolve
 const P0 = new THREE.Vector3(0, 2.7, 0)
 const P1 = new THREE.Vector3(-0.25, 2.83, -0.7)
 const P2 = new THREE.Vector3(
-  HANG_POINT.x + HANG_LEN * Math.sin(THETA0),
-  HANG_POINT.y - HANG_LEN * Math.cos(THETA0),
+  HANG_POINT.x + HANG_RADIUS * Math.sin(THETA0),
+  HANG_POINT.y - HANG_RADIUS * Math.cos(THETA0),
   HANG_POINT.z,
 )
 
@@ -104,8 +108,8 @@ export default function HangController({ stage, groupRef, onHangComplete }: Hang
       const tau = t - FLIGHT_S
       const theta = THETA0 * Math.cos(OMEGA * tau) * Math.exp(-LAMBDA * tau)
       g.position.set(
-        HANG_POINT.x + HANG_LEN * Math.sin(theta),
-        HANG_POINT.y - HANG_LEN * Math.cos(theta),
+        HANG_POINT.x + HANG_RADIUS * Math.sin(theta),
+        HANG_POINT.y - HANG_RADIUS * Math.cos(theta),
         HANG_POINT.z,
       )
       g.rotation.z = theta
