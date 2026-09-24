@@ -13,12 +13,12 @@ type StudioToolbarProps = {
   onColorSelect: (colorId: string) => void
   selectedFace: FacePreset | null
   onFaceSelect: (face: FacePreset | null) => void
-  /** the user's hand-drawn face (root MVP only — studio keeps DTZ-only) */
-  customFace?: FacePreset | null
+  /** the user's hand-drawn gallery (root MVP only — studio keeps DTZ-only) */
+  customFaces?: FacePreset[]
   /** opens the hand-drawing board; omit to hide the draw entry */
   onDraw?: () => void
-  /** deletes the stored hand-drawn face; omit to hide the delete affordance */
-  onDeleteCustom?: () => void
+  /** deletes one stored hand-drawn face by id; omit to hide the delete affordance */
+  onDeleteCustom?: (faceId: string) => void
   /** "ink" = dark text for bright backgrounds (studio) · "night" = light text for dark scenes */
   tone?: "ink" | "night"
   /** optional primary action rendered under the mode tabs (e.g. the MVP 点亮 button) */
@@ -32,7 +32,7 @@ export default function StudioToolbar({
   onColorSelect,
   selectedFace,
   onFaceSelect,
-  customFace,
+  customFaces,
   onDraw,
   onDeleteCustom,
   tone = "ink",
@@ -86,7 +86,7 @@ export default function StudioToolbar({
             tone={tone}
             selectedId={selectedFace?.id ?? null}
             onSelect={onFaceSelect}
-            customFace={customFace}
+            customFaces={customFaces}
             onDraw={onDraw}
             onDeleteCustom={onDeleteCustom}
           />

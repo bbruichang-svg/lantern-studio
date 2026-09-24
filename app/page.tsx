@@ -2,21 +2,23 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import dynamic from "next/dynamic"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import StudioToolbar from "@/components/lantern/StudioToolbar"
 import ShareView from "@/components/lantern/ShareView"
 import FacePainter from "@/components/lantern/FacePainter"
-import { getColorById, getDefaultFace, getFaceById } from "@/lib/lantern/colors"
+import { getColorById, getDefaultFace } from "@/lib/lantern/colors"
 import { renderShareCard } from "@/lib/lantern/share-card"
+import { embedFaceData } from "@/lib/lantern/face-embed"
 import { ensureFace, preloadAllFaces } from "@/lib/lantern/faces"
 import { pickSong, getSongById, type MvpSong } from "@/lib/mvp/songs"
 import { track } from "@/lib/mvp/analytics"
 import {
-  clearCustomFace,
+  addCustomFace,
   customFacePreset,
-  readCustomFace,
-  writeCustomFace,
-  type StoredCustomFace,
+  readCustomFaces,
+  removeCustomFace,
+  resolveFaceById,
 } from "@/lib/mvp/custom-face"
 import {
   BLESSING_MAX,
@@ -85,18 +87,15 @@ export default function MvpPage() {
   // landing 计数读 localStorage — SSR 渲染 0，挂载后再同步，避免水合不匹配
   // （queueMicrotask：新版 react-hooks 规则禁止 effect 内同步 setState）
   const [count, setCount] = useState(0)
-  // 手绘表情 — 本机单槽，挂载时恢复
-  const [customFace, setCustomFace] = useState<FacePreset | null>(null)
+  // 手绘表情画廊 — 本机多张（v2），挂载时恢复
+  const [customFaces, setCustomFaces] = useState<FacePreset[]>([])
   const [painterOpen, setPainterOpen] = useState(false)
   useEffect(() => {
     queueMicrotask(() => {
       setCount(litCount())
-      const stored = readCustomFace()
-      if (stored) {
-        const f = customFacePreset(stored)
-        setCustomFace(f)
-        void ensureFace(f.src) // warm the texture cache for instant swaps
-      }
+      const faces = readCustomFaces().map(customFacePreset)
+      setCustomFaces(faces)
+      for (const f of faces) void ensureFace(f.src) // warm the texture cache
     })
   }, [])
 
@@ -118,6 +117,9 @@ export default function MvpPage() {
   const [litNo, setLitNo] = useState(0)
   // ---- a lantern restored from a share link (?l=...) — skips the flow ----
   const [shared, setShared] = useState<LanternPayload | null>(null)
+  // an embedded hand-drawn face riding the link (payload.fd) — beats every
+  // local fallback because it is the author's actual drawing
+  const [sharedFdFace, setSharedFdFace] = useState<FacePreset | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<number | undefined>(undefined)
 
@@ -139,6 +141,18 @@ export default function MvpPage() {
         track("share_link_opened")
         setShared(payload)
         setStage("finished")
+        // embedded drawing beats the local gallery — it IS the author's lamp
+        if (payload.fd) {
+          const fdFace: FacePreset = {
+            id: "custom",
+            name: "手绘",
+            src: payload.fd,
+            colorId: payload.c,
+            custom: true,
+          }
+          setSharedFdFace(fdFace)
+          void ensureFace(fdFace.src)
+        }
       } else if (new URLSearchParams(search).has("l")) {
         // param present but truncated/tampered → soft fallback, never an error dump
         showToast("灯的线索丢了，先去灯会逛逛吧")
@@ -155,13 +169,13 @@ export default function MvpPage() {
   const color = getColorById(colorId)
 
   // what the 3D scene shows — the user's own lantern, or a shared one.
-  // Shared lamps carrying faceId "custom" fall back to THIS device's own
-  // drawing (links can't carry the image), then to the city default.
+  // Shared lamps resolve their face through the unified resolver: preset →
+  // this device's own hand-drawn gallery (custom:<id>, or legacy "custom"
+  // → newest) → the city default. Links carrying embedded face data (fd)
+  // override all of that below.
   const sceneColor = shared ? getColorById(shared.c) : color
   const sceneFace = shared
-    ? getFaceById(shared.f) ??
-      (shared.f === "custom" ? customFace : null) ??
-      getDefaultFace(shared.c)
+    ? (sharedFdFace ?? resolveFaceById(shared.f) ?? getDefaultFace(shared.c))
     : face
   const sceneSong = shared ? getSongById(shared.s) : song
   const sceneBlessing = shared ? shared.b : blessing.trim()
@@ -200,6 +214,24 @@ export default function MvpPage() {
     return `/release?${params.toString()}`
   }, [colorId, face, blessing])
 
+  // 分享链接内嵌手绘小图（P2）— face 换成手绘时异步预计算，超限为 null
+  const [faceFd, setFaceFd] = useState<string | null>(null)
+  useEffect(() => {
+    let alive = true
+    if (face?.custom) {
+      void embedFaceData(face.src, face.colorId).then((fd) => {
+        if (alive) setFaceFd(fd)
+      })
+    } else {
+      queueMicrotask(() => {
+        if (alive) setFaceFd(null)
+      })
+    }
+    return () => {
+      alive = false
+    }
+  }, [face])
+
   const handleColorSelect = useCallback((id: string) => {
     track("color_selected", { color: id })
     setColorId(id)
@@ -216,16 +248,19 @@ export default function MvpPage() {
     [],
   )
 
-  // delete the hand-drawn face — the personal slot only; preset faces are
-  // baked assets and stay fixed. If the drawing was on the lantern, fall
-  // back to the current city's default face.
-  const handleDeleteCustom = useCallback(() => {
-    clearCustomFace()
-    setCustomFace(null)
-    setFace((prev) => (prev?.id === "custom" ? getDefaultFace(colorId) : prev))
-    track("face_custom_deleted")
-    showToast("手绘表情已删除")
-  }, [colorId, showToast])
+  // delete one hand-drawn face from the gallery — the personal slots only;
+  // preset faces are baked assets and stay fixed. If the deleted drawing was
+  // on the lantern, fall back to the current city's default face.
+  const handleDeleteCustom = useCallback(
+    (faceId: string) => {
+      removeCustomFace(faceId.slice("custom:".length))
+      setCustomFaces((prev) => prev.filter((f) => f.id !== faceId))
+      setFace((prev) => (prev?.id === faceId ? getDefaultFace(colorId) : prev))
+      track("face_custom_deleted")
+      showToast("手绘表情已删除")
+    },
+    [colorId, showToast],
+  )
 
   // ---- 手绘表情 ----
   const openPainter = useCallback(() => {
@@ -236,14 +271,13 @@ export default function MvpPage() {
   const handlePainterSaved = useCallback(
     (src: string) => {
       // ink was matched to the colour worn while drawing — freeze it there
-      const stored: StoredCustomFace = { src, colorId, savedAt: Date.now() }
-      const ok = writeCustomFace(stored)
+      const { face: stored, ok } = addCustomFace(src, colorId)
       const f = customFacePreset(stored)
       void ensureFace(src) // warm the texture cache before the swap
-      setCustomFace(f)
+      setCustomFaces((prev) => [f, ...prev].slice(0, 6))
       setFace(f)
       setPainterOpen(false)
-      track("face_selected", { face: "custom" })
+      track("face_selected", { face: f.id })
       if (!ok) showToast("本机空间不足，手绘仅本次有效")
     },
     [colorId, showToast],
@@ -399,7 +433,8 @@ export default function MvpPage() {
     window.setTimeout(() => setFeedback(null), 1500)
   }, [])
 
-  /** 免库分享链接 — 灯的完整配置编码进 URL 参数（相对路径，换域名不失效） */
+  /** 免库分享链接 — 灯的完整配置编码进 URL 参数（相对路径，换域名不失效）；
+   *  手绘表情随链接内嵌小图（fd），收灯端无需本机画廊也能还原 */
   const buildLanternUrl = useCallback(() => {
     const link = lanternLink({
       c: colorId,
@@ -407,9 +442,10 @@ export default function MvpPage() {
       b: blessing.trim(),
       s: song?.id ?? "",
       n: litNo,
+      ...(faceFd ? { fd: faceFd } : {}),
     })
     return new URL(link, window.location.origin).toString()
-  }, [colorId, face, blessing, song, litNo])
+  }, [colorId, face, blessing, song, litNo, faceFd])
 
   const copyLanternLink = useCallback(async () => {
     const url = buildLanternUrl()
@@ -546,6 +582,12 @@ export default function MvpPage() {
           <p className="mt-5 text-[10px] tracking-[0.25em] text-[#E8E4DA]/40">
             {counterCopy(count).sub}
           </p>
+          <Link
+            href="/my"
+            className="pointer-events-auto mt-4 text-[10px] tracking-[0.3em] text-[#E8E4DA]/40 transition-colors duration-200 hover:text-[#E8E4DA]/80"
+          >
+            我的灯 ›
+          </Link>
         </div>
       )}
 
@@ -564,7 +606,7 @@ export default function MvpPage() {
             onColorSelect={handleColorSelect}
             selectedFace={face}
             onFaceSelect={handleFaceSelect}
-            customFace={customFace}
+            customFaces={customFaces}
             onDraw={openPainter}
             onDeleteCustom={handleDeleteCustom}
             action={

@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import ShareView from "@/components/lantern/ShareView"
-import { getColorById, getDefaultFace, getFaceById } from "@/lib/lantern/colors"
+import { getColorById, getDefaultFace } from "@/lib/lantern/colors"
 import { renderShareCard } from "@/lib/lantern/share-card"
+import { embedFaceData } from "@/lib/lantern/face-embed"
 import { ensureFace, preloadAllFaces } from "@/lib/lantern/faces"
 import { pickSong, getSongById, type MvpSong } from "@/lib/mvp/songs"
 import { track } from "@/lib/mvp/analytics"
@@ -15,7 +16,7 @@ import {
   isBlessingAllowed,
 } from "@/lib/mvp/blessings"
 import { addLantern, formatNumber } from "@/lib/mvp/storage"
-import { customFacePreset, readCustomFace } from "@/lib/mvp/custom-face"
+import { resolveFaceById } from "@/lib/mvp/custom-face"
 import { lanternLink, readLanternFromSearch, type LanternPayload } from "@/lib/mvp/share"
 import type { FacePreset, LanternPhase, ReleaseStage } from "@/lib/lantern/types"
 
@@ -53,6 +54,9 @@ export default function ReleasePage() {
 
   // ---- share-link restore (?l=... opens straight to apex) ----
   const [shared, setShared] = useState<LanternPayload | null>(null)
+  // embedded hand-drawn face riding the link (payload.fd) — the author's
+  // actual drawing, beats every local fallback
+  const [sharedFdFace, setSharedFdFace] = useState<FacePreset | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<number | undefined>(undefined)
 
@@ -71,6 +75,17 @@ export default function ReleasePage() {
       if (payload) {
         track("release_share_opened")
         setShared(payload)
+        if (payload.fd) {
+          const fdFace: FacePreset = {
+            id: "custom",
+            name: "手绘",
+            src: payload.fd,
+            colorId: payload.c,
+            custom: true,
+          }
+          setSharedFdFace(fdFace)
+          void ensureFace(fdFace.src)
+        }
         const s = getSongById(payload.s)
         if (s) setSong(s)
         setStage("apex")
@@ -87,19 +102,14 @@ export default function ReleasePage() {
       const c = params.get("color")
       if (c && getColorById(c).id === c) setColorId(c)
       const f = params.get("face")
-      if (f === "custom") {
-        const stored = readCustomFace()
-        if (stored) {
-          const cf = customFacePreset(stored)
-          setFace(cf)
-          setColorId(cf.colorId)
-          void ensureFace(cf.src)
-        }
-      } else if (f) {
-        const preset = getFaceById(f)
+      // unified resolution: preset faces, hand-drawn gallery ids
+      // (custom:<id>) and the legacy single-slot "custom" (→ newest)
+      if (f) {
+        const preset = resolveFaceById(f)
         if (preset) {
           setFace(preset)
           setColorId(preset.colorId)
+          void ensureFace(preset.src)
         }
       }
       const b = params.get("blessing")
@@ -123,13 +133,11 @@ export default function ReleasePage() {
 
   const color = getColorById(colorId)
   const sceneColor = shared ? getColorById(shared.c) : color
-  // shared lamps with faceId "custom" fall back to THIS device's own
-  // drawing (links can't carry the image), then to the city default
-  const sharedCustom = shared && shared.f === "custom" ? readCustomFace() : null
+  // shared lamps resolve their face: embedded drawing (fd) → preset → this
+  // device's own hand-drawn gallery (custom:<id>, legacy "custom" → newest)
+  // → the city default
   const sceneFace = shared
-    ? getFaceById(shared.f) ??
-      (sharedCustom ? customFacePreset(sharedCustom) : null) ??
-      getDefaultFace(shared.c)
+    ? (sharedFdFace ?? resolveFaceById(shared.f) ?? getDefaultFace(shared.c))
     : face
   const sceneSong = shared ? getSongById(shared.s) : song
   const sceneBlessing = shared ? shared.b : blessing.trim()
@@ -286,6 +294,24 @@ export default function ReleasePage() {
     window.setTimeout(() => setFeedback(null), 1500)
   }, [])
 
+  // 分享链接内嵌手绘小图（P2）— face 换成手绘时异步预计算，超限为 null
+  const [faceFd, setFaceFd] = useState<string | null>(null)
+  useEffect(() => {
+    let alive = true
+    if (face?.custom) {
+      void embedFaceData(face.src, face.colorId).then((fd) => {
+        if (alive) setFaceFd(fd)
+      })
+    } else {
+      queueMicrotask(() => {
+        if (alive) setFaceFd(null)
+      })
+    }
+    return () => {
+      alive = false
+    }
+  }, [face])
+
   const buildLanternUrl = useCallback(() => {
     const link = lanternLink({
       c: colorId,
@@ -293,9 +319,10 @@ export default function ReleasePage() {
       b: blessing.trim(),
       s: song?.id ?? "",
       n: litNo,
+      ...(faceFd ? { fd: faceFd } : {}),
     })
     return new URL(link, window.location.origin).toString()
-  }, [colorId, face, blessing, song, litNo])
+  }, [colorId, face, blessing, song, litNo, faceFd])
 
   const copyLanternLink = useCallback(async () => {
     const url = buildLanternUrl()

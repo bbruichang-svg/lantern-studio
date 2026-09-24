@@ -9,7 +9,7 @@
 export type LanternPayload = {
   /** city colour id */
   c: string
-  /** face preset id */
+  /** face preset id（手绘为 custom:<id>，旧记录 "custom"） */
   f: string
   /** blessing text (≤20 chars) */
   b: string
@@ -17,6 +17,8 @@ export type LanternPayload = {
   s: string
   /** local number, displayed No.XXXXX */
   n: number
+  /** 内嵌手绘小图 dataURL（可选，P2）——存在时收灯端优先用它还原 */
+  fd?: string
 }
 
 const PARAM = "l"
@@ -76,7 +78,9 @@ export function readLanternFromSearch(search: string): LanternPayload | null {
       typeof (p as LanternPayload).f === "string" &&
       typeof (p as LanternPayload).b === "string" &&
       typeof (p as LanternPayload).s === "string" &&
-      typeof (p as LanternPayload).n === "number"
+      typeof (p as LanternPayload).n === "number" &&
+      ((p as LanternPayload).fd === undefined ||
+        typeof (p as LanternPayload).fd === "string")
     ) {
       return p as LanternPayload
     }

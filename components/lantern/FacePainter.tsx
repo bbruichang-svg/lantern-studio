@@ -5,7 +5,7 @@ import { getColorById } from "@/lib/lantern/colors"
 import { track } from "@/lib/mvp/analytics"
 
 type FacePainterProps = {
-  /** city colour the lantern currently wears — ink follows its line colour */
+  /** city colour the lantern currently wears — ink defaults to its line colour */
   colorId: string
   /** receives the exported PNG dataURL (1024×1024 stroke disc) */
   onSaved: (src: string) => void
@@ -16,8 +16,17 @@ const CANVAS_SIZE = 1024
 /** brush widths at canvas scale — DTZ strokes read bold at lantern size */
 const WIDTHS = [22, 46, 84] as const
 
+/**
+ * 彩笔盘 — 首色永远是当前城市的线色（贴纸感，随灯自动适配），
+ * 后面是几个在深浅纸面上都读得出的常用色。存的是色值本身，
+ * 画的颜色与灯色解耦（P2 彩笔扩展）。
+ */
+export function inkPalette(defaultInk: string): string[] {
+  return [defaultInk, "#E8E4DA", "#C64B33", "#D9A441", "#3D5A80", "#4A7A6F"]
+}
+
 type Pt = { x: number; y: number }
-type Stroke = { w: number; pts: Pt[] }
+type Stroke = { w: number; c: string; pts: Pt[] }
 
 /**
  * 手绘表情画板 — a circular disc matching the DTZ artwork convention:
@@ -25,17 +34,15 @@ type Stroke = { w: number; pts: Pt[] }
  * PNG dataURL drops straight into FacePreset.src — LanternModel loads it
  * like any other face, and the existing inverse-projection remap wraps
  * it onto the paper.
- *
- * Ink colour follows the city design's stroke colour (near-black for
- * standard cities, light for inverted ones) so the drawing always reads
- * against that lantern's paper tint.
  */
 export default function FacePainter({ colorId, onSaved, onClosed }: FacePainterProps) {
   const color = useMemo(() => getColorById(colorId), [colorId])
+  const palette = useMemo(() => inkPalette(color.line), [color.line])
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const strokesRef = useRef<Stroke[]>([])
   const drawingRef = useRef(false)
   const [width, setWidth] = useState<number>(WIDTHS[1])
+  const [ink, setInk] = useState<string>(color.line)
   const [count, setCount] = useState(0)
 
   const ctx = useCallback(
@@ -49,10 +56,10 @@ export default function FacePainter({ colorId, onSaved, onClosed }: FacePainterP
     c.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
     c.lineCap = "round"
     c.lineJoin = "round"
-    c.strokeStyle = color.line
-    c.fillStyle = color.line
     for (const s of strokesRef.current) {
       c.lineWidth = s.w
+      c.strokeStyle = s.c
+      c.fillStyle = s.c
       if (s.pts.length === 1) {
         // a tap leaves a dot
         c.beginPath()
@@ -66,7 +73,7 @@ export default function FacePainter({ colorId, onSaved, onClosed }: FacePainterP
       c.stroke()
     }
     setCount(strokesRef.current.length)
-  }, [ctx, color.line])
+  }, [ctx])
 
   const toCanvas = useCallback((e: React.PointerEvent<HTMLCanvasElement>): Pt | null => {
     const el = canvasRef.current
@@ -83,16 +90,16 @@ export default function FacePainter({ colorId, onSaved, onClosed }: FacePainterP
       if (!p || !c) return
       e.currentTarget.setPointerCapture(e.pointerId)
       drawingRef.current = true
-      strokesRef.current.push({ w: width, pts: [p] })
+      strokesRef.current.push({ w: width, c: ink, pts: [p] })
       // draw the dot immediately
       c.lineCap = "round"
-      c.fillStyle = color.line
+      c.fillStyle = ink
       c.beginPath()
       c.arc(p.x, p.y, width / 2, 0, Math.PI * 2)
       c.fill()
       setCount(strokesRef.current.length)
     },
-    [ctx, toCanvas, width, color.line],
+    [ctx, toCanvas, width, ink],
   )
 
   const handleMove = useCallback(
@@ -105,7 +112,7 @@ export default function FacePainter({ colorId, onSaved, onClosed }: FacePainterP
       if (!s) return
       const prev = s.pts[s.pts.length - 1]
       s.pts.push(p)
-      c.strokeStyle = color.line
+      c.strokeStyle = s.c
       c.lineWidth = s.w
       c.lineCap = "round"
       c.lineJoin = "round"
@@ -114,7 +121,7 @@ export default function FacePainter({ colorId, onSaved, onClosed }: FacePainterP
       c.lineTo(p.x, p.y)
       c.stroke()
     },
-    [ctx, toCanvas, color.line],
+    [ctx, toCanvas],
   )
 
   const handleUp = useCallback(() => {
@@ -149,7 +156,7 @@ export default function FacePainter({ colorId, onSaved, onClosed }: FacePainterP
       <div className="w-[min(92vw,380px)] rounded-3xl border border-white/12 bg-[#101828]/95 p-6 text-center">
         <p className="text-sm tracking-[0.42em] text-[#E8E4DA]/90">画一个表情</p>
         <p className="mt-1.5 text-[10px] tracking-[0.25em] text-[#E8E4DA]/45">
-          墨色会随灯色自动适配
+          首色随灯色，其余彩笔任选
         </p>
 
         {/* the disc — backing in the city colour, strokes on a transparent canvas */}
@@ -175,8 +182,30 @@ export default function FacePainter({ colorId, onSaved, onClosed }: FacePainterP
           )}
         </div>
 
+        {/* ink palette — first swatch is the city line colour (default) */}
+        <div className="mt-4 flex items-center justify-center gap-2.5">
+          {palette.map((c) => (
+            <button
+              key={c}
+              type="button"
+              aria-label={c === palette[0] ? "灯色墨" : `彩笔 ${c}`}
+              onClick={() => setInk(c)}
+              className={`flex h-7 w-7 items-center justify-center rounded-full transition-all duration-200 ${
+                ink === c
+                  ? "outline outline-1 outline-[#E8E4DA]/70"
+                  : "outline outline-1 outline-transparent hover:bg-white/5"
+              }`}
+            >
+              <span
+                className={`block h-4 w-4 rounded-full ${c === "#E8E4DA" ? "border border-white/25" : ""}`}
+                style={{ backgroundColor: c }}
+              />
+            </button>
+          ))}
+        </div>
+
         {/* brush width + history controls */}
-        <div className="mt-4 flex items-center justify-center gap-5">
+        <div className="mt-3 flex items-center justify-center gap-5">
           {WIDTHS.map((w) => (
             <button
               key={w}
@@ -194,7 +223,7 @@ export default function FacePainter({ colorId, onSaved, onClosed }: FacePainterP
                 style={{
                   width: 6 + w / 8,
                   height: 6 + w / 8,
-                  backgroundColor: color.line,
+                  backgroundColor: ink,
                 }}
               />
             </button>

@@ -49,6 +49,9 @@ export type MvpEvent =
   | "release_share_opened_card"
   | "release_share_native"
   | "release_share_downloaded"
+  // 我的灯 (P1)
+  | "my_lantern_viewed"
+  | "my_lantern_deleted"
 
 export type Payload = Record<string, string | number>
 

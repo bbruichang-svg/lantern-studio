@@ -6,12 +6,12 @@ import type { FacePreset } from "@/lib/lantern/types"
 type FacePickerProps = {
   selectedId: string | null
   onSelect: (face: FacePreset) => void
-  /** the user's hand-drawn face (single local slot), shown after the draw entry */
-  customFace?: FacePreset | null
+  /** the user's hand-drawn gallery (multi slot), shown after the draw entry */
+  customFaces?: FacePreset[]
   /** opens the hand-drawing board; omit to hide the entry (studio keeps DTZ-only) */
   onDraw?: () => void
-  /** deletes the stored hand-drawn face; omit to hide the delete affordance */
-  onDeleteCustom?: () => void
+  /** deletes one stored hand-drawn face by its FacePreset id; omit to hide the affordance */
+  onDeleteCustom?: (faceId: string) => void
   /** "ink" = dark selection ring (studio) · "night" = light ring (night sky) */
   tone?: "ink" | "night"
 }
@@ -19,7 +19,7 @@ type FacePickerProps = {
 export default function FacePicker({
   selectedId,
   onSelect,
-  customFace,
+  customFaces,
   onDraw,
   onDeleteCustom,
   tone = "ink",
@@ -59,27 +59,27 @@ export default function FacePicker({
         </button>
       )}
 
-      {/* the user's own drawing, when one exists — deletable (the preset
-          faces are fixed; only the personal slot can be removed) */}
-      {customFace && (
-        <div key={customFace.id} className="relative shrink-0">
+      {/* the user's own gallery — newest first, each deletable (the preset
+          faces are fixed; only the personal slots can be removed) */}
+      {(customFaces ?? []).map((cf) => (
+        <div key={cf.id} className="relative shrink-0">
           <button
             type="button"
-            onClick={() => onSelect(customFace)}
-            aria-label={customFace.name}
-            title={customFace.name}
+            onClick={() => onSelect(cf)}
+            aria-label={cf.name}
+            title={cf.name}
             className={`flex h-11 w-11 items-center justify-center rounded-full p-0.5 transition-all duration-200 ${ringCls(
-              selectedId === customFace.id,
+              selectedId === cf.id,
             )}`}
           >
             <span
               className={`flex h-9 w-9 items-center justify-center overflow-hidden rounded-full ${
                 night ? "border border-white/20" : "border border-black/10"
               }`}
-              style={{ backgroundColor: getColorById(customFace.colorId).base }}
+              style={{ backgroundColor: getColorById(cf.colorId).base }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={customFace.src} alt="" draggable={false} className="h-9 w-9 select-none" />
+              <img src={cf.src} alt="" draggable={false} className="h-9 w-9 select-none" />
             </span>
           </button>
           {onDeleteCustom && (
@@ -87,7 +87,7 @@ export default function FacePicker({
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
-                onDeleteCustom()
+                onDeleteCustom(cf.id)
               }}
               aria-label="删除手绘表情"
               title="删除手绘表情"
@@ -101,7 +101,7 @@ export default function FacePicker({
             </button>
           )}
         </div>
-      )}
+      ))}
 
       {ALL_FACES.map((face) => {
         const isSelected = face.id === selectedId
