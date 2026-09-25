@@ -173,7 +173,14 @@ export default function ReleasePage() {
       }
       const b = params.get("blessing")
       if (b && b.length <= BLESSING_MAX && isBlessingAllowed(b)) setBlessing(b)
-      if (c || f || b) {
+      // optional: pin the moon song (deep links / card exports). Without it
+      // the release moment still picks one at random, as it always has.
+      const sg = params.get("song")
+      if (sg) {
+        const preset = getSongById(sg)
+        if (preset) setSong(preset)
+      }
+      if (c || f || b || sg) {
         track("release_prefilled")
         // keep the funnel metric — handleEnter never fires on this path
         track("release_start")
@@ -240,7 +247,9 @@ export default function ReleasePage() {
       return
     }
     track("release_hold_released", { color: colorId })
-    const picked = pickSong()
+    // a pinned song (deep link / relighting a wall lamp) is kept; otherwise
+    // the release moment draws one, as it always has
+    const picked = song ?? pickSong()
     // 先落盘后动画 — the lamp exists on this device the moment it flies
     const res = addLantern({
       colorId,
