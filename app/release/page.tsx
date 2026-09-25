@@ -677,6 +677,12 @@ export default function ReleasePage() {
                 分享这盏灯
               </button>
             )}
+            <Link
+              href="/"
+              className="text-[11px] tracking-[0.3em] text-[#E8E4DA]/45 transition-colors duration-200 hover:text-[#E8E4DA]/85"
+            >
+              ‹ 回到灯会
+            </Link>
           </div>
         </div>
       )}

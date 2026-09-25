@@ -32,6 +32,7 @@ export type MvpEvent =
   | "share_downloaded"
   | "share_native"
   | "share_closed"
+  | "finished_back_home"
   // release (放灯) route — separate funnel from the root MVP
   | "release_page_view"
   | "release_prefilled"

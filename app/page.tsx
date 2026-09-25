@@ -412,6 +412,18 @@ export default function MvpPage() {
     setStage("make")
   }, [])
 
+  // ‹ 回到灯会 — leave the finished stillness for the landing gate.
+  // Own lamp: the stage change cancels the auto-advance timer. Shared lamp:
+  // scrub the ?l= param too, or the share-restore effect would bounce back.
+  const handleBackHome = useCallback(() => {
+    track("finished_back_home")
+    setShared(null)
+    setBlessing("")
+    setSong(null)
+    window.history.replaceState(null, "", window.location.pathname)
+    setStage("landing")
+  }, [])
+
   useEffect(() => {
     if (stage !== "share" || !song) return
     let cancelled = false
@@ -726,9 +738,10 @@ export default function MvpPage() {
               </>
             )}
             <div className="pointer-events-auto mt-6 flex flex-col items-center gap-3">
-              {/* own lamp: no buttons — the stillness auto-advances into
-                  /release after FINISHED_HOLD_MS; sharing happens at the end
-                  of that ritual */}
+              {/* own lamp: the stillness auto-advances into /release after
+                  FINISHED_HOLD_MS; sharing happens at the end of that ritual.
+                  The exit below is always available — an explicit click beats
+                  the timer either way. */}
               {shared && (
                 <button
                   type="button"
@@ -738,6 +751,13 @@ export default function MvpPage() {
                   我也点一盏
                 </button>
               )}
+              <button
+                type="button"
+                onClick={handleBackHome}
+                className="text-[11px] tracking-[0.3em] text-[#E8E4DA]/45 transition-colors duration-200 hover:text-[#E8E4DA]/85"
+              >
+                ‹ 回到灯会
+              </button>
             </div>
           </div>
         </>
