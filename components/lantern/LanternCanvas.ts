@@ -1,4 +1,5 @@
 import * as THREE from "three"
+import { INK_SILVER } from "@/components/lantern/FacePainter"
 import { getCachedFace } from "@/lib/lantern/faces"
 import { worldYForV } from "@/lib/lantern/geometry"
 
@@ -144,16 +145,55 @@ export class LanternCanvas {
       if (img) {
         sctx.drawImage(img, 0, 0, TEXTURE_SIZE, TEXTURE_SIZE)
         if (inkColor) {
-          sctx.globalCompositeOperation = "source-in"
-          sctx.fillStyle = inkColor
-          sctx.fillRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE)
-          sctx.globalCompositeOperation = "source-over"
+          this.reinkFaceLayer(sctx, inkColor)
         }
       }
     }
     this.hasFace = src !== null
     this.remapFaceLayer()
     this.composite()
+  }
+
+  /**
+   * 三层重着色（原 source-in 单色填充的升级）：
+   *  - 普通笔画（含全部彩笔、DTZ 黑墨）→ 城市线色（挡光档，行为不变）
+   *  - 银墨 #C8CDD6（lum≈0.81 的实心像素）→ 保持银（半透光档）
+   *  - 透光笔 纯白（lum≥0.97 的实心像素）→ 保持白（镂空全透光档）
+   * 灯面 shader 的透光量正比于贴图亮度，这三档即「墨 / 银微亮 / 亮孔」。
+   * 判定要求 alpha≥0.9：DTZ 反白设计的抗锯齿灰边（半透明）一律掉回
+   * 线色档，预设表情不受亮度带影响。
+   */
+  private reinkFaceLayer(ctx: CanvasRenderingContext2D, inkColor: string): void {
+    const S = TEXTURE_SIZE
+    const data = ctx.getImageData(0, 0, S, S)
+    const px = data.data
+    const v = parseInt(inkColor.slice(1), 16)
+    const inkR = (v >> 16) & 0xff
+    const inkG = (v >> 8) & 0xff
+    const inkB = v & 0xff
+    const sv = parseInt(INK_SILVER.slice(1), 16)
+    const silverR = (sv >> 16) & 0xff
+    const silverG = (sv >> 8) & 0xff
+    const silverB = sv & 0xff
+    for (let i = 0; i < px.length; i += 4) {
+      const a = px[i + 3]
+      if (a === 0) continue
+      const lum = (px[i] + px[i + 1] + px[i + 2]) / (3 * 255)
+      if (a >= 230 && lum >= 0.97) {
+        px[i] = 255
+        px[i + 1] = 255
+        px[i + 2] = 255
+      } else if (a >= 230 && lum >= 0.72) {
+        px[i] = silverR
+        px[i + 1] = silverG
+        px[i + 2] = silverB
+      } else {
+        px[i] = inkR
+        px[i + 1] = inkG
+        px[i + 2] = inkB
+      }
+    }
+    ctx.putImageData(data, 0, 0)
   }
 
   /**

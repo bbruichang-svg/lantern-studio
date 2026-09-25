@@ -17,12 +17,29 @@ const CANVAS_SIZE = 1024
 const WIDTHS = [22, 46, 84] as const
 
 /**
+ * 特殊墨性 — 三层发光画笔的另外两档（re-ink 时按亮度分级保留）：
+ *  - 银墨：半透光档，灯亮时比纸面亮一档（re-ink 亮度带 0.72–0.97）
+ *  - 透光笔：镂空档，纯白，灯亮时像纸剪出的孔，透光最强（≥0.97）
+ * 上脸后所有普通彩笔仍统一重映射为城市线色（挡光档），行为不变。
+ */
+export const INK_SILVER = "#C8CDD6"
+export const INK_LIGHT = "#FFFFFF"
+
+/** 银/透光笔画在画板上的深色底晕 — 浅色纸上也读得出笔画 */
+const GLOW_UNDER = "rgba(15,18,26,0.45)"
+
+/**
  * 彩笔盘 — 首色永远是当前城市的线色（贴纸感，随灯自动适配），
- * 后面是几个在深浅纸面上都读得出的常用色。存的是色值本身，
- * 画的颜色与灯色解耦（P2 彩笔扩展）。
+ * 后面是几个在深浅纸面上都读得出的常用色 + 两支发光特殊笔。
+ * 存的是色值本身，画的颜色与灯色解耦（P2 彩笔扩展）。
  */
 export function inkPalette(defaultInk: string): string[] {
-  return [defaultInk, "#E8E4DA", "#C64B33", "#D9A441", "#3D5A80", "#4A7A6F"]
+  return [defaultInk, "#E8E4DA", "#C64B33", "#D9A441", "#3D5A80", "#4A7A6F", INK_SILVER, INK_LIGHT]
+}
+
+/** 发光特殊笔（银/透光）— 画板上带深色底描边，浅色纸上也读得出 */
+function isGlowInk(c: string): boolean {
+  return c === INK_SILVER || c === INK_LIGHT
 }
 
 type Pt = { x: number; y: number }
@@ -57,19 +74,35 @@ export default function FacePainter({ colorId, onSaved, onClosed }: FacePainterP
     c.lineCap = "round"
     c.lineJoin = "round"
     for (const s of strokesRef.current) {
-      c.lineWidth = s.w
-      c.strokeStyle = s.c
-      c.fillStyle = s.c
+      const glow = isGlowInk(s.c)
       if (s.pts.length === 1) {
-        // a tap leaves a dot
+        // a tap leaves a dot (glow inks get a dark under-halo first)
+        if (glow) {
+          c.fillStyle = GLOW_UNDER
+          c.beginPath()
+          c.arc(s.pts[0].x, s.pts[0].y, (s.w / 2) * 1.35, 0, Math.PI * 2)
+          c.fill()
+        }
+        c.fillStyle = s.c
         c.beginPath()
         c.arc(s.pts[0].x, s.pts[0].y, s.w / 2, 0, Math.PI * 2)
         c.fill()
         continue
       }
-      c.beginPath()
-      c.moveTo(s.pts[0].x, s.pts[0].y)
-      for (let i = 1; i < s.pts.length; i++) c.lineTo(s.pts[i].x, s.pts[i].y)
+      const trace = () => {
+        c.beginPath()
+        c.moveTo(s.pts[0].x, s.pts[0].y)
+        for (let i = 1; i < s.pts.length; i++) c.lineTo(s.pts[i].x, s.pts[i].y)
+      }
+      if (glow) {
+        c.strokeStyle = GLOW_UNDER
+        c.lineWidth = s.w * 1.35
+        trace()
+        c.stroke()
+      }
+      c.strokeStyle = s.c
+      c.lineWidth = s.w
+      trace()
       c.stroke()
     }
     setCount(strokesRef.current.length)
@@ -91,8 +124,14 @@ export default function FacePainter({ colorId, onSaved, onClosed }: FacePainterP
       e.currentTarget.setPointerCapture(e.pointerId)
       drawingRef.current = true
       strokesRef.current.push({ w: width, c: ink, pts: [p] })
-      // draw the dot immediately
+      // draw the dot immediately (glow inks get a dark under-halo first)
       c.lineCap = "round"
+      if (isGlowInk(ink)) {
+        c.fillStyle = GLOW_UNDER
+        c.beginPath()
+        c.arc(p.x, p.y, (width / 2) * 1.35, 0, Math.PI * 2)
+        c.fill()
+      }
       c.fillStyle = ink
       c.beginPath()
       c.arc(p.x, p.y, width / 2, 0, Math.PI * 2)
@@ -112,13 +151,22 @@ export default function FacePainter({ colorId, onSaved, onClosed }: FacePainterP
       if (!s) return
       const prev = s.pts[s.pts.length - 1]
       s.pts.push(p)
-      c.strokeStyle = s.c
-      c.lineWidth = s.w
       c.lineCap = "round"
       c.lineJoin = "round"
-      c.beginPath()
-      c.moveTo(prev.x, prev.y)
-      c.lineTo(p.x, p.y)
+      const segment = () => {
+        c.beginPath()
+        c.moveTo(prev.x, prev.y)
+        c.lineTo(p.x, p.y)
+      }
+      if (isGlowInk(s.c)) {
+        c.strokeStyle = GLOW_UNDER
+        c.lineWidth = s.w * 1.35
+        segment()
+        c.stroke()
+      }
+      c.strokeStyle = s.c
+      c.lineWidth = s.w
+      segment()
       c.stroke()
     },
     [ctx, toCanvas],
@@ -156,7 +204,7 @@ export default function FacePainter({ colorId, onSaved, onClosed }: FacePainterP
       <div className="w-[min(92vw,380px)] rounded-3xl border border-white/12 bg-[#101828]/95 p-6 text-center">
         <p className="text-sm tracking-[0.42em] text-[#E8E4DA]/90">画一个表情</p>
         <p className="mt-1.5 text-[10px] tracking-[0.25em] text-[#E8E4DA]/45">
-          首色随灯色，其余彩笔任选
+          银墨微透 · 透光成孔 · 其余彩笔任选
         </p>
 
         {/* the disc — backing in the city colour, strokes on a transparent canvas */}
@@ -182,13 +230,22 @@ export default function FacePainter({ colorId, onSaved, onClosed }: FacePainterP
           )}
         </div>
 
-        {/* ink palette — first swatch is the city line colour (default) */}
+        {/* ink palette — first swatch is the city line colour (default),
+            tail swatches are the glow inks (silver / light) */}
         <div className="mt-4 flex items-center justify-center gap-2.5">
           {palette.map((c) => (
             <button
               key={c}
               type="button"
-              aria-label={c === palette[0] ? "灯色墨" : `彩笔 ${c}`}
+              aria-label={
+                c === palette[0]
+                  ? "灯色墨"
+                  : c === INK_SILVER
+                    ? "银墨 半透光"
+                    : c === INK_LIGHT
+                      ? "透光笔 镂空"
+                      : `彩笔 ${c}`
+              }
               onClick={() => setInk(c)}
               className={`flex h-7 w-7 items-center justify-center rounded-full transition-all duration-200 ${
                 ink === c
@@ -196,10 +253,15 @@ export default function FacePainter({ colorId, onSaved, onClosed }: FacePainterP
                   : "outline outline-1 outline-transparent hover:bg-white/5"
               }`}
             >
-              <span
-                className={`block h-4 w-4 rounded-full ${c === "#E8E4DA" ? "border border-white/25" : ""}`}
-                style={{ backgroundColor: c }}
-              />
+              {c === INK_LIGHT ? (
+                // 透光笔 — hollow ring: the ink IS the hole in the paper
+                <span className="block h-4 w-4 rounded-full border-2 border-[#E8E4DA]" />
+              ) : (
+                <span
+                  className={`block h-4 w-4 rounded-full ${c === "#E8E4DA" || c === INK_SILVER ? "border border-white/25" : ""}`}
+                  style={{ backgroundColor: c }}
+                />
+              )}
             </button>
           ))}
         </div>
