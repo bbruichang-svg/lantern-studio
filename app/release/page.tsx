@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import dynamic from "next/dynamic"
+import Link from "next/link"
 import ShareView from "@/components/lantern/ShareView"
 import { getColorById, getDefaultFace } from "@/lib/lantern/colors"
 import { renderShareCard } from "@/lib/lantern/share-card"
@@ -34,6 +35,8 @@ const HOLD_THRESHOLD_MS = 700
 
 export default function ReleasePage() {
   const [stage, setStage] = useState<ReleaseStage>("arrive")
+  // 返回键目标：从灯墙「点亮看看」进来的回灯墙，其余回主页
+  const [fromWall, setFromWall] = useState(false)
   // prefers-reduced-motion: compressed flight/hang/dissolve timelines
   const reduceMotion = usePrefersReducedMotion()
   const [colorId, setColorId] = useState<string>("xuan")
@@ -108,6 +111,7 @@ export default function ReleasePage() {
       // fires in the root make flow, so relighting is replay, not spam.
       if (params.get("from") === "wall") {
         const wid = Number(params.get("id"))
+        setFromWall(true)
         window.history.replaceState(null, "", window.location.pathname)
         if (!Number.isInteger(wid) || wid <= 0) return
         track("release_wall_opened")
@@ -491,6 +495,16 @@ export default function ReleasePage() {
         onHangComplete={handleHangComplete}
         onDissolveComplete={handleDissolveComplete}
       />
+
+      {/* ---------------- BACK (top-left, pre-release stages only) ---------------- */}
+      {(stage === "arrive" || stage === "wish" || stage === "charge") && (
+        <Link
+          href={fromWall ? "/wall" : "/"}
+          className="absolute left-5 top-5 z-20 text-[11px] tracking-[0.3em] text-[#E8E4DA]/45 transition-colors duration-200 hover:text-[#E8E4DA]/85"
+        >
+          ‹ 返回
+        </Link>
+      )}
 
       {/* ---------------- ARRIVE ---------------- */}
       {stage === "arrive" && (

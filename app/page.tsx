@@ -622,6 +622,15 @@ export default function MvpPage() {
             stage === "lighting" ? "pointer-events-none opacity-0" : "opacity-100"
           }`}
         >
+          {stage === "make" && (
+            <button
+              type="button"
+              onClick={() => setStage("landing")}
+              className="absolute left-5 top-5 z-20 text-[11px] tracking-[0.3em] text-[#E8E4DA]/45 transition-colors duration-200 hover:text-[#E8E4DA]/85"
+            >
+              ‹ 返回
+            </button>
+          )}
           <StudioToolbar
             tone="night"
             mode={mode}
@@ -739,6 +748,16 @@ export default function MvpPage() {
           pressed & held (hold-to-light); interactive children opt back in */}
       {stage === "blessing" && (
         <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center px-6 pb-[8vh] text-center">
+          <button
+            type="button"
+            onClick={() => {
+              setMode("color")
+              setStage("make")
+            }}
+            className="pointer-events-auto absolute left-5 top-5 z-20 text-[11px] tracking-[0.3em] text-[#E8E4DA]/45 transition-colors duration-200 hover:text-[#E8E4DA]/85"
+          >
+            ‹ 返回
+          </button>
           <p className="text-[10px] tracking-[0.45em] text-[#E8E4DA]/50">给这盏灯写一句话</p>
           <div className="pointer-events-auto mt-6 w-full max-w-sm rounded-2xl border border-white/15 bg-white/[0.08] px-5 py-4 backdrop-blur-md">
             <input
@@ -806,16 +825,6 @@ export default function MvpPage() {
               按住灯笼，为它蓄光
             </p>
           )}
-          <button
-            type="button"
-            onClick={() => {
-              setMode("color")
-              setStage("make")
-            }}
-            className="pointer-events-auto mt-4 text-[10px] tracking-[0.3em] text-[#E8E4DA]/40 transition-colors duration-200 hover:text-[#E8E4DA]/75"
-          >
-            ‹ 返回修改灯笼
-          </button>
         </div>
       )}
 

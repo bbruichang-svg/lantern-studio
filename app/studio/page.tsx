@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import dynamic from "next/dynamic"
+import Link from "next/link"
 import StudioToolbar from "@/components/lantern/StudioToolbar"
 import { DEFAULT_COLOR_ID, getColorById, getDefaultFace } from "@/lib/lantern/colors"
 import { preloadAllFaces } from "@/lib/lantern/faces"
@@ -76,6 +77,16 @@ export default function LanternPage() {
           opacity: night ? 1 : 0,
         }}
       />
+
+      {/* back to the festival — bright-paper ink while editing */}
+      {phase === "studio" && (
+        <Link
+          href="/"
+          className="absolute left-5 top-5 z-20 text-[11px] tracking-[0.3em] text-[#0B1220]/45 transition-colors duration-200 hover:text-[#0B1220]/80"
+        >
+          ‹ 返回
+        </Link>
+      )}
 
       <LanternScene
         color={color}
