@@ -52,6 +52,8 @@ export type MvpEvent =
   // 我的灯 (P1)
   | "my_lantern_viewed"
   | "my_lantern_deleted"
+  // 灯墙（公共层）
+  | "page_view_wall"
 
 export type Payload = Record<string, string | number>
 

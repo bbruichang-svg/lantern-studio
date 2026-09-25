@@ -27,6 +27,7 @@ import {
   isBlessingAllowed,
 } from "@/lib/mvp/blessings"
 import { addLantern, litCount, formatNumber } from "@/lib/mvp/storage"
+import { pushToWall, fetchWallCount } from "@/lib/lantern/cloud"
 import { lanternLink, readLanternFromSearch, type LanternPayload } from "@/lib/mvp/share"
 import { usePrefersReducedMotion } from "@/lib/lantern/motion"
 import type { FacePreset, LanternPhase, MvpStage, StudioMode } from "@/lib/lantern/types"
@@ -97,7 +98,10 @@ export default function MvpPage() {
   const [painterOpen, setPainterOpen] = useState(false)
   useEffect(() => {
     queueMicrotask(() => {
-      setCount(litCount())
+      // 优先全网真实计数（灯墙表），云失败回退本机数 — 两层都存在感在线
+      void fetchWallCount().then((global) => {
+        setCount(global ?? litCount())
+      })
       const faces = readCustomFaces().map(customFacePreset)
       setCustomFaces(faces)
       for (const f of faces) void ensureFace(f.src) // warm the texture cache
@@ -320,6 +324,14 @@ export default function MvpPage() {
     setSong(picked)
     setStage("lighting")
     if (res.trimmed) showToast("本机空间不足，最早的灯将被清理")
+    // 匿名汇入公共灯墙 — fire-and-forget，云失败静默（本机灯册已落定）
+    void pushToWall({
+      colorId,
+      faceId: face?.id ?? "",
+      faceSrc: face?.src ?? null,
+      blessing: text,
+      songId: picked.id,
+    })
   }, [blessing, colorId, face, showToast])
 
   // ---- hold-to-light: press & hold the lantern ≥900ms to charge it alight.
@@ -593,6 +605,12 @@ export default function MvpPage() {
             className="pointer-events-auto mt-4 text-[10px] tracking-[0.3em] text-[#E8E4DA]/40 transition-colors duration-200 hover:text-[#E8E4DA]/80"
           >
             我的灯 ›
+          </Link>
+          <Link
+            href="/wall"
+            className="pointer-events-auto mt-1.5 text-[10px] tracking-[0.3em] text-[#E8E4DA]/40 transition-colors duration-200 hover:text-[#E8E4DA]/80"
+          >
+            灯墙 ›
           </Link>
         </div>
       )}
