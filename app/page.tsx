@@ -832,7 +832,8 @@ export default function MvpPage() {
 
       {/* 署名角标（个人项目定位，PRD 合规精神的轻量版） */}
       <p className="pointer-events-none absolute bottom-2.5 left-4 z-20 text-[9px] tracking-[0.2em] text-[#E8E4DA]/25">
-        LANTERN © 2026 · Fan-made · 致敬陈奕迅 · 纯属娱乐  Design by Be Water.
+        <span className="block sm:inline">LANTERN © 2026 · Fan-made · 致敬陈奕迅 · 纯属娱乐</span>{" "}
+        <span className="block sm:inline">Design by Be Water.</span>
       </p>
     </main>
   )
