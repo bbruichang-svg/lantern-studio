@@ -200,7 +200,6 @@ export default function LanternModel({
     // DEBUG: expose texture layers for inspection (remove before V2)
     if (typeof window !== "undefined") {
       ;(window as unknown as Record<string, unknown>).__lanternDebug = lanternTexture
-      ;(window as unknown as Record<string, unknown>).__ensureFace = ensureFace
     }
     return () => {
       cancelled = true
