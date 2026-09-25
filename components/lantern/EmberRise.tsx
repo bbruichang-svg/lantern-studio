@@ -30,8 +30,8 @@ type EmberRiseProps = {
 
 const ORIGIN_Y = BODY_TOP_Y + RING_CAP_HEIGHT + 0.06
 const COUNT = 120
-const SPAWN_RATE = 2.6 // motes / second, steady state
-const SURGE_RATE = 26 // motes / second during the ignition surge
+const SPAWN_RATE = 3.8 // motes / second, steady state (v2 微调: 2.6→3.8, 存活约 14→21 颗仍克制)
+const SURGE_RATE = 30 // motes / second during the ignition surge
 const SURGE_WINDOW = 1.4 // seconds of surge after activation
 const START_DELAY = 0 // motes take over the moment the lantern is lit
 
@@ -158,11 +158,11 @@ export default function EmberRise({ active, tint, paused = false, reduceMotion =
       s.z0 = Math.sin(a) * r
       s.age = 0
       s.life = 4 + Math.random() * 3
-      s.vy = 0.22 + Math.random() * 0.23
+      s.vy = 0.24 + Math.random() * 0.26
       s.amp = 0.06 + Math.random() * 0.14
       s.freq = 0.6 + Math.random() * 1.2
       s.phase = Math.random() * Math.PI * 2
-      s.whiten = Math.random() * 0.35
+      s.whiten = Math.random() * 0.45
       s.alive = true
     }
 
