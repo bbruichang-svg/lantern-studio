@@ -180,6 +180,17 @@ export default function WallPage() {
                       </p>
                     </div>
                   </div>
+                  {/* 点亮看看 — replay this lantern's release ritual, pre-filled
+                      from the cloud row (?from=wall&id=). Replay only: the
+                      release flow never writes back, no duplicate rows. */}
+                  <div className="mt-3 flex justify-end">
+                    <Link
+                      href={`/release?from=wall&id=${lamp.id}`}
+                      className="text-[10px] tracking-[0.3em] text-[#E8E4DA]/40 transition-colors duration-200 hover:text-[#E8E4DA]/85"
+                    >
+                      点亮看看 ›
+                    </Link>
+                  </div>
                 </li>
               )
             })}

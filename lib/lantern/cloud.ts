@@ -39,6 +39,7 @@ export type WallLantern = {
   blessing: string | null
   song_id: string | null
   lit_at: string
+  client_id: string | null
 }
 
 type WallInsert = {
@@ -47,6 +48,7 @@ type WallInsert = {
   face_data?: string | null
   blessing?: string | null
   song_id?: string | null
+  client_id?: string | null
 }
 
 /** supabase 风格 schema 类型 — 让 from("wall_lanterns") 的链式调用全带类型 */
@@ -83,6 +85,33 @@ const FACE_DATA_MAX = 6000
 const BLESSING_MAX = 80
 
 /**
+ * 本机访客标识 — 防刷节流用（非身份，无任何个人信息）。
+ * localStorage 持久化 UUID；不可用时返回 null（该行不带 client_id，
+ * DB 触发器对 NULL 放行 — 宁可漏放也不打扰正常访客）。
+ */
+const CLIENT_ID_KEY = "moon.wallClient.v1"
+
+function getClientId(): string | null {
+  if (typeof window === "undefined") return null
+  try {
+    let id = window.localStorage.getItem(CLIENT_ID_KEY)
+    if (!id) {
+      id =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+      window.localStorage.setItem(CLIENT_ID_KEY, id)
+    }
+    return id
+  } catch {
+    return null
+  }
+}
+
+/** 单访客每小时汇入上限 — 与 DB 触发器 wall_lanterns_rate_guard 同值 */
+const RATE_LIMIT_PER_HOUR = 20
+
+/**
  * 匿名把一盏灯汇入灯墙。fire-and-forget：resolve false 时静默放弃。
  * 永不 throw — 点亮流程不因云失败中断。
  */
@@ -90,6 +119,17 @@ export async function pushToWall(input: WallLanternInput): Promise<boolean> {
   const cloud = getCloud()
   if (!cloud) return false
   try {
+    // 客户端节流：本机一小时内已达上限就不再发请求（DB 触发器兜底）
+    const clientId = getClientId()
+    if (clientId) {
+      const hourAgo = new Date(Date.now() - 3600_000).toISOString()
+      const { count, error } = await cloud.database
+        .from("wall_lanterns")
+        .select("id", { count: "exact", head: true })
+        .eq("client_id", clientId)
+        .gt("lit_at", hourAgo)
+      if (!error && typeof count === "number" && count >= RATE_LIMIT_PER_HOUR) return false
+    }
     const faceData =
       input.faceSrc && input.faceSrc.startsWith("data:") && input.faceSrc.length <= FACE_DATA_MAX
         ? input.faceSrc
@@ -102,6 +142,7 @@ export async function pushToWall(input: WallLanternInput): Promise<boolean> {
         face_data: faceData,
         blessing: input.blessing ? input.blessing.slice(0, BLESSING_MAX) : null,
         song_id: input.songId ? input.songId.slice(0, 80) : null,
+        client_id: clientId,
       })
       .select()
     return !error
@@ -122,6 +163,23 @@ export async function fetchWallLanterns(limit = 60): Promise<WallLantern[] | nul
       .limit(limit)
     if (error) return null
     return (data ?? []) as WallLantern[]
+  } catch {
+    return null
+  }
+}
+
+/** 按 id 取一盏灯 — 灯墙「点亮看看」直达 release 用。失败返回 null。 */
+export async function fetchWallLanternById(id: number): Promise<WallLantern | null> {
+  const cloud = getCloud()
+  if (!cloud) return null
+  try {
+    const { data, error } = await cloud.database
+      .from("wall_lanterns")
+      .select("id, color_id, face_id, face_data, blessing, song_id, lit_at")
+      .eq("id", id)
+      .maybeSingle()
+    if (error) return null
+    return (data as WallLantern) ?? null
   } catch {
     return null
   }

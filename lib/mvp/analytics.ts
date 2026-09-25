@@ -35,6 +35,7 @@ export type MvpEvent =
   // release (放灯) route — separate funnel from the root MVP
   | "release_page_view"
   | "release_prefilled"
+  | "release_wall_opened"
   | "release_start"
   | "release_charge_entered"
   | "release_hold_started"

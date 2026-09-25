@@ -18,6 +18,7 @@ import {
 import { addLantern, formatNumber } from "@/lib/mvp/storage"
 import { resolveFaceById } from "@/lib/mvp/custom-face"
 import { lanternLink, readLanternFromSearch, type LanternPayload } from "@/lib/mvp/share"
+import { fetchWallLanternById } from "@/lib/lantern/cloud"
 import { usePrefersReducedMotion } from "@/lib/lantern/motion"
 import type { FacePreset, LanternPhase, ReleaseStage } from "@/lib/lantern/types"
 
@@ -101,6 +102,57 @@ export default function ReleasePage() {
       // (image data), so they fall back to THIS device's own drawing, then to
       // the city default.
       const params = new URLSearchParams(search)
+      // 灯墙「点亮看看」(?from=wall&id=) — pull the lantern from the cloud
+      // wall and land straight on charge with the author's colour/face/
+      // blessing. This path never re-inserts a wall row: pushToWall only
+      // fires in the root make flow, so relighting is replay, not spam.
+      if (params.get("from") === "wall") {
+        const wid = Number(params.get("id"))
+        window.history.replaceState(null, "", window.location.pathname)
+        if (!Number.isInteger(wid) || wid <= 0) return
+        track("release_wall_opened")
+        void fetchWallLanternById(wid).then((row) => {
+          if (!row) {
+            showToast("这盏灯已经够不到了")
+            return
+          }
+          if (getColorById(row.color_id).id === row.color_id) setColorId(row.color_id)
+          if (row.face_data) {
+            // hand-drawn — the embedded 128px PNG is the author's actual ink
+            const wallFace: FacePreset = {
+              id: "custom",
+              name: "手绘",
+              src: row.face_data,
+              colorId: row.color_id,
+              custom: true,
+            }
+            setFace(wallFace)
+            setColorId(row.color_id)
+            void ensureFace(wallFace.src)
+          } else {
+            const preset = resolveFaceById(row.face_id ?? "")
+            if (preset) {
+              setFace(preset)
+              setColorId(preset.colorId)
+              void ensureFace(preset.src)
+            }
+          }
+          const wallSong = getSongById(row.song_id ?? "")
+          if (wallSong) setSong(wallSong)
+          if (
+            row.blessing &&
+            row.blessing.length <= BLESSING_MAX &&
+            isBlessingAllowed(row.blessing)
+          ) {
+            setBlessing(row.blessing)
+          }
+          track("release_prefilled")
+          track("release_start")
+          setStage("charge")
+          track("release_charge_entered")
+        })
+        return
+      }
       if (params.get("from") !== "make") return
       const c = params.get("color")
       if (c && getColorById(c).id === c) setColorId(c)
@@ -128,6 +180,8 @@ export default function ReleasePage() {
       }
       window.history.replaceState(null, "", window.location.pathname)
     })
+    // showToast is a stable []-dep callback — one-shot mount effect by design
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
