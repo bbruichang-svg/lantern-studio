@@ -1,14 +1,17 @@
 /**
  * MVP analytics — anonymous events only, no account system (PRD §12).
  *
- * P0 sink: events go into a local queue (localStorage ring buffer) plus
- * console for dev visibility. No server reporting. When a stats service
- * is wired up later (P1), the stored queue is drained from here and the
- * rest of the app never changes (track() signature is stable).
+ * Sinks: (1) local queue (localStorage ring buffer) plus console — dev
+ * visibility and offline fallback; (2) cloud visit_logs table via
+ * pushVisitLog (fire-and-forget, insert-only through RLS; aggregation
+ * happens on the admin side). The stored queue is never drained to the
+ * cloud — records are reported as they are tracked.
+ * The rest of the app never changes (track() signature is stable).
  *
  * Each record carries: event name, payload, timestamp, anonymous device
  * UUID, coarse device class and app version. No IP, no blessing text.
  */
+import { pushVisitLog } from "../lantern/cloud"
 export type MvpEvent =
   | "page_view"
   | "start_clicked"
@@ -149,6 +152,9 @@ export function track(event: MvpEvent, payload?: Payload): void {
   const queue = readQueue()
   queue.push(record)
   writeQueue(queue)
+  // 云端 sink（fire-and-forget）— 云失败静默，本地队列仍是兜底。
+  // visit_logs 为仅插入表（RLS 无 SELECT），聚合查询在管理端做。
+  void pushVisitLog(record)
 }
 
 /** debug export (PRD §12: 提供调试导出接口) — full queue, oldest first */

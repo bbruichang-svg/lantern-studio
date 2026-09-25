@@ -51,6 +51,17 @@ type WallInsert = {
   client_id?: string | null
 }
 
+/** visit_logs 插入投影 — 匿名访问日志（RLS 仅插入，前端无 SELECT 权限） */
+export type VisitLogInsert = {
+  uid: string
+  event: string
+  path?: string | null
+  device?: string | null
+  payload?: Record<string, string | number> | null
+  client_t?: number | null
+  app_version?: string | null
+}
+
 /** supabase 风格 schema 类型 — 让 from("wall_lanterns") 的链式调用全带类型 */
 export type WallDatabase = {
   public: {
@@ -59,6 +70,12 @@ export type WallDatabase = {
         Row: WallLantern
         Insert: WallInsert
         Update: Partial<WallInsert>
+        Relationships: []
+      }
+      visit_logs: {
+        Row: VisitLogInsert & { id: number; created_at: string }
+        Insert: VisitLogInsert
+        Update: Partial<VisitLogInsert>
         Relationships: []
       }
     }
@@ -197,5 +214,44 @@ export async function fetchWallCount(): Promise<number | null> {
     return typeof count === "number" ? count : null
   } catch {
     return null
+  }
+}
+
+/** 访问日志字段上限 — 与 DB 列宽/防刷触发器对齐 */
+const VISIT_EVENT_MAX = 80
+const VISIT_PATH_MAX = 120
+
+/**
+ * 匿名访问日志上报 — 前端 track() 的云端 sink（visit_logs 表）。
+ * fire-and-forget：云失败完全静默，analytics 本地 localStorage 队列仍是兜底。
+ * 注意：visit_logs 无 SELECT 策略（RLS 仅插入），insert 不能链 .select()，
+ * 否则 return=representation 需要 SELECT 权限、必然 42501。聚合查询在管理端做。
+ */
+export async function pushVisitLog(record: {
+  e: string
+  p?: Record<string, string | number>
+  t: number
+  u: string
+  d: string
+  v: string
+}): Promise<boolean> {
+  const cloud = getCloud()
+  if (!cloud) return false
+  try {
+    const { error } = await cloud.database.from("visit_logs").insert({
+      uid: record.u.slice(0, 64),
+      event: record.e.slice(0, VISIT_EVENT_MAX),
+      path:
+        typeof window !== "undefined" && window.location
+          ? window.location.pathname.slice(0, VISIT_PATH_MAX)
+          : null,
+      device: record.d.slice(0, 4),
+      payload: record.p ?? null,
+      client_t: record.t,
+      app_version: record.v.slice(0, 8),
+    })
+    return !error
+  } catch {
+    return false
   }
 }
