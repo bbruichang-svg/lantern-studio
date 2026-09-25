@@ -12,6 +12,7 @@ import ReleaseReflection from "./ReleaseReflection"
 import SoarController, { APEX_Y } from "./SoarController"
 import HangController, { HANG_LANTERN_POS } from "./HangController"
 import TreeBranch from "./TreeBranch"
+import { TIMELINE_REDUCED } from "@/lib/lantern/motion"
 import type { FacePreset, LanternColor, LanternPhase, ReleaseStage } from "@/lib/lantern/types"
 
 type LanternSceneProps = {
@@ -25,6 +26,8 @@ type LanternSceneProps = {
   moon?: boolean
   /** freeze animation (share-card capture) */
   paused?: boolean
+  /** prefers-reduced-motion: compressed timelines, no sway/gust/pendulum */
+  reduceMotion?: boolean
   /** filled with a capture() function that returns the WebGL canvas as a PNG data URL */
   captureApiRef?: { current: (() => string) | null }
   /** blessing stage with a blessing written — pressing the lantern charges it */
@@ -290,6 +293,7 @@ function DissolveController({
   glowRef,
   moonBoostRef,
   hangPos,
+  reduceMotion = false,
   onComplete,
 }: {
   stage: ReleaseStage
@@ -298,11 +302,14 @@ function DissolveController({
   moonBoostRef: { current: number }
   /** where the lantern rests when the merge starts (apex hover or hang point) */
   hangPos?: { x: number; y: number; z: number }
+  /** prefers-reduced-motion: the merge compresses to ~1s */
+  reduceMotion?: boolean
   onComplete: () => void
 }) {
   const start = hangPos ?? { x: 0, y: APEX_Y, z: 0 }
   const elapsed = useRef(0)
   const fired = useRef(false)
+  const DURATION_S = reduceMotion ? TIMELINE_REDUCED.dissolve : DISSOLVE_DURATION_S
 
   useEffect(() => {
     if (stage === "dissolve") {
@@ -329,8 +336,8 @@ function DissolveController({
 
   useFrame((_, delta) => {
     if (stage !== "dissolve") return
-    elapsed.current = Math.min(elapsed.current + Math.min(delta, 0.05), DISSOLVE_DURATION_S)
-    const e = elapsed.current / DISSOLVE_DURATION_S
+    elapsed.current = Math.min(elapsed.current + Math.min(delta, 0.05), DURATION_S)
+    const e = elapsed.current / DURATION_S
     const s = THREE.MathUtils.smoothstep(e, 0, 1)
 
     const g = groupRef.current
@@ -376,6 +383,7 @@ export default function LanternScene({
   env,
   moon,
   paused,
+  reduceMotion = false,
   captureApiRef,
   holdEnabled,
   charging,
@@ -448,6 +456,7 @@ export default function LanternScene({
           phase={phase}
           onCoreClick={onCoreClick}
           paused={paused}
+          reduceMotion={reduceMotion}
           holdEnabled={holdEnabled}
           charging={charging}
           onHoldStart={onHoldStart}
@@ -456,19 +465,25 @@ export default function LanternScene({
         {/* steady state — warm motes rising from the top opening. Inside the
             group so they follow the lantern through flight/hang/dissolve
             (the group sits at the origin on every other route — no change). */}
-        <EmberRise active={phase === "finished"} tint={emberTint} paused={paused} />
+        <EmberRise active={phase === "finished"} tint={emberTint} paused={paused} reduceMotion={reduceMotion} />
       </group>
       {releaseStage && (
         <SoarController
           stage={releaseStage}
           groupRef={lanternGroup}
           progressRef={soarProgress}
+          reduceMotion={reduceMotion}
           onSoarComplete={onSoarComplete}
         />
       )}
       {/* 挂树终幕 — fly to the bare branch, catch, sway, then hand off */}
       {releaseStage && (
-        <HangController stage={releaseStage} groupRef={lanternGroup} onHangComplete={onHangComplete} />
+        <HangController
+          stage={releaseStage}
+          groupRef={lanternGroup}
+          reduceMotion={reduceMotion}
+          onHangComplete={onHangComplete}
+        />
       )}
       {/* the bare branch reaches in for the hang finale and stays for the card */}
       {releaseStage && (
@@ -488,11 +503,12 @@ export default function LanternScene({
           glowRef={dissolveGlowRef}
           moonBoostRef={moonBoostRef}
           hangPos={HANG_LANTERN_POS}
+          reduceMotion={reduceMotion}
           onComplete={onDissolveComplete ?? (() => {})}
         />
       )}
       {/* the night sky answers: stars wake near→far once the lantern is lit */}
-      <AwakenedStars active={lit} paused={paused} />
+      <AwakenedStars active={lit} paused={paused} reduceMotion={reduceMotion} />
       <CameraFit pullBack={lit} />
       {captureApiRef && (
         <CaptureBridge

@@ -5,6 +5,7 @@ import dynamic from "next/dynamic"
 import StudioToolbar from "@/components/lantern/StudioToolbar"
 import { DEFAULT_COLOR_ID, getColorById, getDefaultFace } from "@/lib/lantern/colors"
 import { preloadAllFaces } from "@/lib/lantern/faces"
+import { usePrefersReducedMotion } from "@/lib/lantern/motion"
 import type { FacePreset, LanternPhase, StudioMode } from "@/lib/lantern/types"
 
 const LanternScene = dynamic(() => import("@/components/lantern/LanternScene"), {
@@ -14,6 +15,9 @@ const LanternScene = dynamic(() => import("@/components/lantern/LanternScene"), 
 
 export default function LanternPage() {
   const [colorId, setColorId] = useState<string>(DEFAULT_COLOR_ID)
+  // prefers-reduced-motion: compressed lighting timeline → shorter timer
+  const reduceMotion = usePrefersReducedMotion()
+  const lightingHoldMs = reduceMotion ? 1500 : 3600
   // a city colour carries its own DTZ face; picking a face switches
   // the lantern to that design's colour (city = colour + expression)
   const [face, setFace] = useState<FacePreset | null>(() => getDefaultFace(DEFAULT_COLOR_ID))
@@ -47,9 +51,9 @@ export default function LanternPage() {
 
   useEffect(() => {
     if (phase !== "lighting") return
-    const timer = window.setTimeout(() => setPhase("finished"), 3600)
+    const timer = window.setTimeout(() => setPhase("finished"), lightingHoldMs)
     return () => window.clearTimeout(timer)
-  }, [phase])
+  }, [phase, lightingHoldMs])
 
   return (
     <main className="relative h-dvh w-full overflow-hidden bg-[#F7F4ED]">
@@ -73,7 +77,13 @@ export default function LanternPage() {
         }}
       />
 
-      <LanternScene color={color} face={face} phase={phase} onCoreClick={handleCoreClick} />
+      <LanternScene
+        color={color}
+        face={face}
+        phase={phase}
+        onCoreClick={handleCoreClick}
+        reduceMotion={reduceMotion}
+      />
 
       {/* title */}
       <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center pt-6 sm:pt-8">

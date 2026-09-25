@@ -1,9 +1,10 @@
 "use client"
 
-import { useRef } from "react"
+import { useMemo, useRef } from "react"
 import * as THREE from "three"
 import { useFrame, useThree } from "@react-three/fiber"
 import type { ReleaseStage } from "@/lib/lantern/types"
+import { TIMELINE_REDUCED } from "@/lib/lantern/motion"
 import { BODY_TOP_Y, RING_CAP_HEIGHT } from "@/lib/lantern/geometry"
 
 /**
@@ -39,7 +40,6 @@ export const HANG_LANTERN_POS = {
 
 const FLIGHT_S = 1.8
 const SWAY_S = 2.7
-const HANG_TOTAL_S = FLIGHT_S + SWAY_S // 4.5
 
 const THETA0 = 0.065 // initial swing amplitude ≈ 3.7°
 const OMEGA = 2.6 // slightly slower than the physical pendulum — more graceful
@@ -48,11 +48,6 @@ const LAMBDA = 0.3 // decay: amplitude ≈ 0.029 (1.7°) at hand-off to dissolve
 // bezier control: apex hover → arc peak (lifted above the chord) → hang pos
 const P0 = new THREE.Vector3(0, 2.7, 0)
 const P1 = new THREE.Vector3(-0.25, 2.83, -0.7)
-const P2 = new THREE.Vector3(
-  HANG_POINT.x + HANG_RADIUS * Math.sin(THETA0),
-  HANG_POINT.y - HANG_RADIUS * Math.cos(THETA0),
-  HANG_POINT.z,
-)
 
 function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
@@ -66,15 +61,39 @@ function smoothstep(t: number): number {
 type HangControllerProps = {
   stage: ReleaseStage
   groupRef: React.RefObject<THREE.Group | null>
+  /** prefers-reduced-motion: shorter flight, no pendulum — hangs dead still */
+  reduceMotion?: boolean
   onHangComplete?: () => void
 }
 
-export default function HangController({ stage, groupRef, onHangComplete }: HangControllerProps) {
+export default function HangController({
+  stage,
+  groupRef,
+  reduceMotion = false,
+  onHangComplete,
+}: HangControllerProps) {
   const controls = useThree((s) => s.controls) as { target: THREE.Vector3 } | null
   const camera = useThree((s) => s.camera)
   const prevStage = useRef<ReleaseStage | null>(null)
   const elapsed = useRef(0)
   const fired = useRef(false)
+
+  // reduced-motion: the catch still happens (narrative beat) but the
+  // pendulum swing is dropped entirely — the lantern simply settles.
+  const flightS = reduceMotion ? TIMELINE_REDUCED.hangFlight : FLIGHT_S
+  const swayS = reduceMotion ? TIMELINE_REDUCED.hangSway : SWAY_S
+  const totalS = flightS + swayS
+  const theta0 = reduceMotion ? 0 : THETA0
+  // bezier end point depends on the catch amplitude (lean-in at θ₀)
+  const P2 = useMemo(
+    () =>
+      new THREE.Vector3(
+        HANG_POINT.x + HANG_RADIUS * Math.sin(theta0),
+        HANG_POINT.y - HANG_RADIUS * Math.cos(theta0),
+        HANG_POINT.z,
+      ),
+    [theta0],
+  )
 
   useFrame((_, delta) => {
     const g = groupRef.current
@@ -88,12 +107,12 @@ export default function HangController({ stage, groupRef, onHangComplete }: Hang
 
     if (stage !== "hang") return
 
-    elapsed.current = Math.min(elapsed.current + Math.min(delta, 0.05), HANG_TOTAL_S)
+    elapsed.current = Math.min(elapsed.current + Math.min(delta, 0.05), totalS)
     const t = elapsed.current
 
-    if (t <= FLIGHT_S) {
+    if (t <= flightS) {
       // phase A — arcing flight from apex to the branch tip
-      const p = t / FLIGHT_S
+      const p = t / flightS
       const e = easeInOutCubic(p)
       const u = 1 - e
       g.position.set(
@@ -102,11 +121,11 @@ export default function HangController({ stage, groupRef, onHangComplete }: Hang
         u * u * P0.z + 2 * u * e * P1.z + e * e * P2.z,
       )
       // lean into the arrival, reaching θ₀ exactly at the catch
-      g.rotation.z = THETA0 * e
+      g.rotation.z = theta0 * e
     } else {
-      // phase B — rigid pendulum around the branch tip
-      const tau = t - FLIGHT_S
-      const theta = THETA0 * Math.cos(OMEGA * tau) * Math.exp(-LAMBDA * tau)
+      // phase B — rigid pendulum around the branch tip (θ₀=0 → hangs still)
+      const tau = t - flightS
+      const theta = theta0 * Math.cos(OMEGA * tau) * Math.exp(-LAMBDA * tau)
       g.position.set(
         HANG_POINT.x + HANG_RADIUS * Math.sin(theta),
         HANG_POINT.y - HANG_RADIUS * Math.cos(theta),
@@ -133,7 +152,7 @@ export default function HangController({ stage, groupRef, onHangComplete }: Hang
       }
     }
 
-    if (t >= HANG_TOTAL_S && !fired.current) {
+    if (t >= totalS && !fired.current) {
       fired.current = true
       onHangComplete?.()
     }

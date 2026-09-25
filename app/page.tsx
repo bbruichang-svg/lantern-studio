@@ -28,6 +28,7 @@ import {
 } from "@/lib/mvp/blessings"
 import { addLantern, litCount, formatNumber } from "@/lib/mvp/storage"
 import { lanternLink, readLanternFromSearch, type LanternPayload } from "@/lib/mvp/share"
+import { usePrefersReducedMotion } from "@/lib/lantern/motion"
 import type { FacePreset, LanternPhase, MvpStage, StudioMode } from "@/lib/lantern/types"
 
 const LanternScene = dynamic(() => import("@/components/lantern/LanternScene"), {
@@ -78,6 +79,10 @@ function counterCopy(n: number): { main: string; sub: string } {
 export default function MvpPage() {
   const router = useRouter()
   const [stage, setStage] = useState<MvpStage>("landing")
+  // prefers-reduced-motion: the 3D scene compresses timelines and drops
+  // sway/gust; the lighting-timer shortens to match (hook is SSR-safe)
+  const reduceMotion = usePrefersReducedMotion()
+  const lightingMs = reduceMotion ? 1200 : LIGHTING_MS
   const [colorId, setColorId] = useState<string>("chengdu")
   // a city colour carries its own DTZ face — picking a colour brings its
   // artwork, picking a face switches the lantern to that design's colour
@@ -356,9 +361,9 @@ export default function MvpPage() {
     const timer = window.setTimeout(() => {
       setStage("finished")
       track("light_completed", { color: colorId })
-    }, LIGHTING_MS)
+    }, lightingMs)
     return () => window.clearTimeout(timer)
-  }, [stage, colorId])
+  }, [stage, colorId, lightingMs])
 
   // seamless bridge: after the finished stillness ("今晚，灯亮了。") the flow
   // auto-advances into the /release ritual — wish page pre-filled, no second
@@ -558,6 +563,7 @@ export default function MvpPage() {
         moon
         onCoreClick={handleCoreClick}
         paused={generating}
+        reduceMotion={reduceMotion}
         captureApiRef={captureApi}
         holdEnabled={stage === "blessing" && !!blessing.trim()}
         charging={charging}

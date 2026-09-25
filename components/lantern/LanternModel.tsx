@@ -7,6 +7,7 @@ import { BODY_TOP_Y, RING_CAP_HEIGHT, RING_RADIUS, buildLanternGeometry } from "
 import { ensureFace } from "@/lib/lantern/faces"
 import { LanternCanvas } from "./LanternCanvas"
 import { computeBreath, computeGust, computeIdleSway, computeIgnitionSwell, computeLightingFrame, gustNow, LIGHTING_DURATION } from "./LanternLighting"
+import { TIMELINE_REDUCED } from "@/lib/lantern/motion"
 import type { FacePreset, LanternColor, LanternPhase } from "@/lib/lantern/types"
 
 type LanternModelProps = {
@@ -16,6 +17,8 @@ type LanternModelProps = {
   onCoreClick: () => void
   /** freeze all animation (sway timeline stops) — used while capturing the share card */
   paused?: boolean
+  /** prefers-reduced-motion: no sway, no gust; brightness timeline compressed */
+  reduceMotion?: boolean
   /** blessing stage with a blessing written — pressing the lantern charges it */
   holdEnabled?: boolean
   /** true while the user is holding the lantern down (charge feedback) */
@@ -60,6 +63,7 @@ export default function LanternModel({
   phase,
   onCoreClick,
   paused = false,
+  reduceMotion = false,
   holdEnabled = false,
   charging = false,
   onHoldStart,
@@ -228,18 +232,23 @@ export default function LanternModel({
     const lit = lightTimeRef.current >= 0
     if (lit) lightTimeRef.current += dt
 
-    const frame = lit ? computeLightingFrame(lightTimeRef.current) : null
+    // reduced-motion: compress the lighting timeline (same keyframes, faster
+    // clock). Breath keeps its real-time rhythm — brightness is not motion.
+    const lightDur = reduceMotion ? TIMELINE_REDUCED.lighting : LIGHTING_DURATION
+    const tLight = lightTimeRef.current * (LIGHTING_DURATION / lightDur)
+    const frame = lit ? computeLightingFrame(tLight) : null
 
     // steady-state breathing: once the timeline has run its course, blend
     // the dual-frequency swell into every light channel over ~2s. On top of
     // it, the ignition swell surges past the steady level right at
     // completion and settles back — the lantern-native "pop".
-    const over = lit ? lightTimeRef.current - LIGHTING_DURATION : -1
+    const over = lit ? tLight - LIGHTING_DURATION : -1
     if (over < 0) breathBlendRef.current = 0
     else breathBlendRef.current = Math.min(1, breathBlendRef.current + dt / 2)
     const breath = 1 + (computeBreath(lightTimeRef.current) - 1) * breathBlendRef.current
-    // 风过事件: every ~26s a gust passes — the light dips/flickers briefly
-    const gust = computeGust(gustNow())
+    // 风过事件: every ~26s a gust passes — the light dips/flickers briefly.
+    // reduced-motion: no gust (purely decorative disturbance).
+    const gust = reduceMotion ? { strength: 0, dir: 1 } : computeGust(gustNow())
     const flickerNoise = 0.5 + 0.5 * Math.sin(timeRef.current * 9.3) * Math.sin(timeRef.current * 5.1 + 1.7)
     const lightGust = 1 - 0.1 * gust.strength * flickerNoise
     const lightMod = breath * (over >= 0 ? computeIgnitionSwell(over) : 1) * lightGust
@@ -265,12 +274,18 @@ export default function LanternModel({
     }
 
     // gentle hanging sway, boosted briefly while lighting up, pushed by the
-    // passing gust (the lantern leans with the wind)
+    // passing gust (the lantern leans with the wind).
+    // reduced-motion: the lantern hangs perfectly still.
     if (swayGroup.current) {
-      const boost = frame ? frame.swayBoost : 1
-      const idle = computeIdleSway(timeRef.current, boost * (1 + gust.strength * 2.2))
-      swayGroup.current.rotation.z = idle.rotZ + gust.strength * gust.dir * 0.02
-      swayGroup.current.rotation.x = idle.rotX
+      if (reduceMotion) {
+        swayGroup.current.rotation.z = 0
+        swayGroup.current.rotation.x = 0
+      } else {
+        const boost = frame ? frame.swayBoost : 1
+        const idle = computeIdleSway(timeRef.current, boost * (1 + gust.strength * 2.2))
+        swayGroup.current.rotation.z = idle.rotZ + gust.strength * gust.dir * 0.02
+        swayGroup.current.rotation.x = idle.rotX
+      }
     }
 
     const k = 1 - Math.exp(-6 * dt)

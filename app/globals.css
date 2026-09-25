@@ -40,6 +40,14 @@ body {
   animation: pulse-soft 2.6s ease-in-out infinite;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  /* hint text: no pulsing — hold a calm mid-visibility instead */
+  .animate-pulse-soft {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
 /* candle wick CTA: a barely-there flicker so the flame feels alive */
 @keyframes wick-flicker {
   0%,

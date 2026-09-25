@@ -18,6 +18,7 @@ import {
 import { addLantern, formatNumber } from "@/lib/mvp/storage"
 import { resolveFaceById } from "@/lib/mvp/custom-face"
 import { lanternLink, readLanternFromSearch, type LanternPayload } from "@/lib/mvp/share"
+import { usePrefersReducedMotion } from "@/lib/lantern/motion"
 import type { FacePreset, LanternPhase, ReleaseStage } from "@/lib/lantern/types"
 
 const LanternScene = dynamic(() => import("@/components/lantern/LanternScene"), {
@@ -32,6 +33,8 @@ const HOLD_THRESHOLD_MS = 700
 
 export default function ReleasePage() {
   const [stage, setStage] = useState<ReleaseStage>("arrive")
+  // prefers-reduced-motion: compressed flight/hang/dissolve timelines
+  const reduceMotion = usePrefersReducedMotion()
   const [colorId, setColorId] = useState<string>("xuan")
   const [face, setFace] = useState<FacePreset | null>(() => getDefaultFace("xuan"))
   const [song, setSong] = useState<MvpSong | null>(null)
@@ -423,6 +426,7 @@ export default function ReleasePage() {
         moon
         onCoreClick={() => {}}
         paused={generating}
+        reduceMotion={reduceMotion}
         captureApiRef={captureApi}
         holdEnabled={stage === "charge" && !!blessing.trim()}
         charging={charging}

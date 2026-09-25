@@ -13,6 +13,8 @@ type EmberRiseProps = {
   tint: THREE.Color
   /** freeze all animation — used while capturing the share card */
   paused?: boolean
+  /** prefers-reduced-motion: keep the slow rise, drop the wind advection */
+  reduceMotion?: boolean
 }
 
 /**
@@ -81,7 +83,7 @@ function makeMoteTexture(): THREE.CanvasTexture {
   return tex
 }
 
-export default function EmberRise({ active, tint, paused = false }: EmberRiseProps) {
+export default function EmberRise({ active, tint, paused = false, reduceMotion = false }: EmberRiseProps) {
   const texture = useMemo(() => makeMoteTexture(), [])
 
   const geo = useMemo(() => {
@@ -178,8 +180,9 @@ export default function EmberRise({ active, tint, paused = false }: EmberRisePro
 
     const tint = tintRef.current
     // 风过事件: the passing gust advects the motes sideways (shared clock
-    // with the lantern's sway, so the wind reads as one event)
-    const gust = computeGust(gustNow())
+    // with the lantern's sway, so the wind reads as one event).
+    // reduced-motion: the wind is purely decorative — no advection.
+    const gust = reduceMotion ? { strength: 0, dir: 1 } : computeGust(gustNow())
     const windDrift = gust.dir * gust.strength * 0.35 * dt
     for (let i = 0; i < COUNT; i++) {
       const s = state[i]

@@ -4,6 +4,7 @@ import { useRef } from "react"
 import * as THREE from "three"
 import { useFrame, useThree } from "@react-three/fiber"
 import type { ReleaseStage } from "@/lib/lantern/types"
+import { TIMELINE_REDUCED } from "@/lib/lantern/motion"
 import { HANG_LANTERN_POS } from "./HangController"
 
 /**
@@ -31,6 +32,8 @@ type SoarControllerProps = {
   groupRef: React.RefObject<THREE.Group | null>
   /** shared with ReleaseGround so the contact shadow knows when to let go */
   progressRef: { current: number }
+  /** prefers-reduced-motion: shorter climb, no lateral drift / body roll */
+  reduceMotion?: boolean
   onSoarComplete?: () => void
 }
 
@@ -38,6 +41,7 @@ export default function SoarController({
   stage,
   groupRef,
   progressRef,
+  reduceMotion = false,
   onSoarComplete,
 }: SoarControllerProps) {
   // registered by OrbitControls makeDefault in LanternScene
@@ -46,6 +50,10 @@ export default function SoarController({
   const prevStage = useRef<ReleaseStage | null>(null)
   const elapsed = useRef(0)
   const fired = useRef(false)
+  // reduced-motion: keep the vertical narrative (it lifts, it arrives) but
+  // compress it and drop every decorative lateral drift and body roll
+  const dur = reduceMotion ? TIMELINE_REDUCED.soar : SOAR_DURATION_S
+  const drift = reduceMotion ? 0 : 1
 
   useFrame((_, delta) => {
     const g = groupRef.current
@@ -59,20 +67,20 @@ export default function SoarController({
     prevStage.current = stage
 
     if (stage === "soar") {
-      elapsed.current = Math.min(elapsed.current + delta, SOAR_DURATION_S)
-      const p = elapsed.current / SOAR_DURATION_S
+      elapsed.current = Math.min(elapsed.current + delta, dur)
+      const p = elapsed.current / dur
       progressRef.current = p
       const e = easeInOutCubic(p)
       // drift envelope: grows in, dies out at apex so the lamp ends centered
       const env = Math.pow(Math.sin(Math.PI * Math.min(p, 1)), 0.7)
 
       g.position.set(
-        0.35 * Math.sin(elapsed.current * 1.7) * env,
+        0.35 * Math.sin(elapsed.current * 1.7) * env * drift,
         e * APEX_Y,
-        0.16 * Math.cos(elapsed.current * 1.25) * env,
+        0.16 * Math.cos(elapsed.current * 1.25) * env * drift,
       )
-      g.rotation.z = -0.07 * Math.cos(elapsed.current * 1.7) * env
-      g.rotation.y = 0.22 * Math.sin(elapsed.current * 0.9) * env
+      g.rotation.z = -0.07 * Math.cos(elapsed.current * 1.7) * env * drift
+      g.rotation.y = 0.22 * Math.sin(elapsed.current * 0.9) * env * drift
 
       // camera follow — look up with the lantern, plus partial parallax
       // (method-call form: react-hooks/immutability forbids property writes

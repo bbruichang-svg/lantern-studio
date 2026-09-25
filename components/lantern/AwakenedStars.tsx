@@ -11,6 +11,8 @@ type AwakenedStarsProps = {
   active: boolean
   /** freeze all animation — used while capturing the share card */
   paused?: boolean
+  /** prefers-reduced-motion: all stars wake at once, hold a steady glow */
+  reduceMotion?: boolean
 }
 
 /**
@@ -40,7 +42,7 @@ function makeRng(seed: number): () => number {
 
 // makeStarTexture now lives in ./starTexture (shared with TreeBranch hanging stars)
 
-export default function AwakenedStars({ active, paused = false }: AwakenedStarsProps) {
+export default function AwakenedStars({ active, paused = false, reduceMotion = false }: AwakenedStarsProps) {
   const texture = useMemo(() => makeStarTexture(), [])
   const groupRef = useRef<THREE.Group>(null)
   const matRefs = useRef<(THREE.SpriteMaterial | null)[]>([])
@@ -105,13 +107,14 @@ export default function AwakenedStars({ active, paused = false }: AwakenedStarsP
       const mat = matRefs.current[i]
       const sprite = spriteRefs.current[i]
       if (!mat || !sprite) continue
-      const wake = Math.min(1, Math.max(0, (clock.current - st.delay) / 1.2))
+      // reduced-motion: no staggered wake, no twinkle — a steady calm sky
+      const wake = reduceMotion ? 1 : Math.min(1, Math.max(0, (clock.current - st.delay) / 1.2))
       if (wake <= 0) {
         mat.opacity = 0
         continue
       }
       const env = 1 - Math.pow(1 - wake, 2.2) // ease-out awaken
-      const twinkle = 0.65 + 0.35 * Math.sin(clock.current * st.freq * Math.PI * 2 + st.phase)
+      const twinkle = reduceMotion ? 0.85 : 0.65 + 0.35 * Math.sin(clock.current * st.freq * Math.PI * 2 + st.phase)
       mat.opacity = env * st.maxO * twinkle
       sprite.scale.setScalar(st.scale * (0.9 + 0.25 * twinkle))
     }
