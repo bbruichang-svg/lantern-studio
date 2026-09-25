@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import type { ReactNode } from "react"
 import ColorPicker from "./ColorPicker"
 import FacePicker from "./FacePicker"
+import { usePrefersReducedMotion } from "@/lib/lantern/motion"
 import type { FacePreset, StudioMode } from "@/lib/lantern/types"
 
 type StudioToolbarProps = {
@@ -39,6 +40,8 @@ export default function StudioToolbar({
   action,
 }: StudioToolbarProps) {
   const night = tone === "night"
+  // prefers-reduced-motion: controls appear instantly, no cascade entrance
+  const reduceMotion = usePrefersReducedMotion()
 
   // 「新」badge on the FACE tab — a first-visit hint toward the hand-drawing
   // entry. Disappears once the FACE tab is opened; remembered via localStorage.
@@ -66,7 +69,12 @@ export default function StudioToolbar({
   }
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center pb-3 sm:pb-4">
+    <div
+      className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center pb-3 sm:pb-4 ${
+        reduceMotion ? "" : "cascade-rise"
+      }`}
+      style={reduceMotion ? undefined : { animationDelay: "180ms" }}
+    >
       {/* expanding panel — intentionally cardless and compact: one thin
           strip hugging the bottom edge so the lantern silhouette stays clear */}
       <div

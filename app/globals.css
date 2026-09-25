@@ -40,7 +40,45 @@ body {
   animation: pulse-soft 2.6s ease-in-out infinite;
 }
 
+/* 编辑控件级联入场: soft rise (bottom-anchored controls) and settle (top
+   header). `both` fill keeps elements invisible until their stagger delay
+   elapses, so a single class + inline animation-delay reads as a cascade. */
+@keyframes cascade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cascade-settle {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.cascade-rise {
+  animation: cascade-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cascade-settle {
+  animation: cascade-settle 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .cascade-rise,
+  .cascade-settle {
+    animation: none;
+  }
+
   /* hint text: no pulsing — hold a calm mid-visibility instead */
   .animate-pulse-soft {
     animation: none;

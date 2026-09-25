@@ -88,16 +88,17 @@ export default function LanternPage() {
       {/* title */}
       <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center pt-6 sm:pt-8">
         <h1
-          className={`text-[11px] font-medium tracking-[0.42em] transition-colors duration-[1800ms] sm:text-xs ${
+          className={`cascade-settle text-[11px] font-medium tracking-[0.42em] transition-colors duration-[1800ms] sm:text-xs ${
             night ? "text-[#E8E4DA]/80" : "text-[#2A2622]/75"
           }`}
         >
           LANTERN STUDIO
         </h1>
         <p
-          className={`mt-1.5 text-[11px] tracking-[0.2em] transition-colors duration-[1800ms] ${
+          className={`cascade-settle mt-1.5 text-[11px] tracking-[0.2em] transition-colors duration-[1800ms] ${
             night ? "text-[#E8E4DA]/50" : "text-[#2A2622]/45"
           }`}
+          style={{ animationDelay: "90ms" }}
         >
           画一盏灯，点亮它
         </p>
@@ -111,7 +112,8 @@ export default function LanternPage() {
             setMode(null)
             setPhase("ready")
           }}
-          className="absolute right-5 top-6 z-10 rounded-full px-5 py-2.5 text-xs tracking-[0.25em] text-[#2A2622]/75 outline outline-1 outline-[#2A2622]/25 transition-all duration-200 hover:bg-black/5 hover:text-[#2A2622] sm:right-8 sm:top-8"
+          className="cascade-rise absolute right-5 top-6 z-10 rounded-full px-5 py-2.5 text-xs tracking-[0.25em] text-[#2A2622]/75 outline outline-1 outline-[#2A2622]/25 transition-all duration-200 hover:bg-black/5 hover:text-[#2A2622] sm:right-8 sm:top-8"
+          style={{ animationDelay: "100ms" }}
         >
           DONE
         </button>
