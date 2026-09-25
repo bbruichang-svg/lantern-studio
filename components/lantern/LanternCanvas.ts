@@ -25,6 +25,9 @@ function makeRng(seed: number): () => number {
  */
 const FACE_PATCH_WORLD_R = 0.85
 
+/** 表情 crossfade 时长（秒）— 与颜色材质 lerp 的 ~0.5s 收敛同节奏 */
+const FACE_FADE_S = 0.55
+
 function makeCanvas(size: number): HTMLCanvasElement {
   const c = document.createElement("canvas")
   c.width = size
@@ -58,9 +61,15 @@ export class LanternCanvas {
   private bumpCanvas: HTMLCanvasElement
   private facePlanarCanvas: HTMLCanvasElement
   private faceCanvas: HTMLCanvasElement
+  /** 上一帧表情快照 — 表情/墨色 crossfade 时与新表情在合成期做真交叉淡化 */
+  private facePrevCanvas: HTMLCanvasElement
   private drawingCanvas: HTMLCanvasElement
   private textCanvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
+  /** faceCanvas 里是否有完整表情（首帧上脸不做 fade，没有可淡出的东西） */
+  private hasFace = false
+  /** crossfade 进度：≤0 未开始 / (0,1) 淡化中 / ≥1 已完成 */
+  private fadeT = 1
 
   constructor() {
     this.compositeCanvas = makeCanvas(TEXTURE_SIZE)
@@ -69,6 +78,7 @@ export class LanternCanvas {
     this.bumpCanvas = makeCanvas(TEXTURE_SIZE)
     this.facePlanarCanvas = makeCanvas(TEXTURE_SIZE)
     this.faceCanvas = makeCanvas(TEXTURE_SIZE)
+    this.facePrevCanvas = makeCanvas(TEXTURE_SIZE)
     this.drawingCanvas = makeCanvas(TEXTURE_SIZE)
     this.textCanvas = makeCanvas(TEXTURE_SIZE)
 
@@ -104,10 +114,29 @@ export class LanternCanvas {
    * so without this a dark-ink face would vanish on the ink-black
    * cities (墨黑/墨夜); remapped, any face reads on any base exactly
    * like the DTZ inverted designs do.
+   *
+   * `fade`（默认开）：换脸/换墨色时把当前 faceCanvas 快照到
+   * facePrevCanvas，合成期对新旧两层做 ~0.55s 真交叉淡化（reduced-motion
+   * 由调用方传 false 直切）。首帧上脸（原来没有表情）不淡化。
    */
-  setFaceImage(src: string | null, inkColor?: string): void {
+  setFaceImage(src: string | null, inkColor?: string, fade = true): void {
     const sctx = this.facePlanarCanvas.getContext("2d", { willReadFrequently: true })
     if (!sctx) return
+
+    // crossfade 快照：faceCanvas 永远持有最近一次完整表情（全 alpha），
+    // 连续快速切换时直接以它为新起点，轻微跳变可接受
+    if (fade && this.hasFace) {
+      const pctx = this.facePrevCanvas.getContext("2d")
+      if (pctx) {
+        pctx.setTransform(1, 0, 0, 1, 0, 0)
+        pctx.clearRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE)
+        pctx.drawImage(this.faceCanvas, 0, 0)
+        this.fadeT = 0.0001
+      }
+    } else {
+      this.fadeT = 1
+    }
+
     sctx.setTransform(1, 0, 0, 1, 0, 0)
     sctx.clearRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE)
     if (src) {
@@ -122,7 +151,19 @@ export class LanternCanvas {
         }
       }
     }
+    this.hasFace = src !== null
     this.remapFaceLayer()
+    this.composite()
+  }
+
+  /**
+   * 表情 crossfade 时钟 — LanternModel 的 useFrame 每帧调用。
+   * 只在淡化进行中做合成（1024² canvas 四层重绘 + 纹理重传），
+   * 静止时零开销。
+   */
+  tickFaceFade(dt: number): void {
+    if (this.fadeT <= 0 || this.fadeT >= 1) return
+    this.fadeT = Math.min(1, this.fadeT + dt / FACE_FADE_S)
     this.composite()
   }
 
@@ -355,7 +396,18 @@ export class LanternCanvas {
     this.ctx.drawImage(this.paperCanvas, 0, 0)
     this.ctx.drawImage(this.drawingCanvas, 0, 0)
     this.ctx.drawImage(this.textCanvas, 0, 0)
-    this.ctx.drawImage(this.faceCanvas, 0, 0)
+    // 真交叉淡化：旧表情 alpha (1-p) 在下、新表情 alpha p 在上，
+    // 中点两层各半 — 墨迹像在纸上互溶，而不是硬切换
+    if (this.fadeT > 0 && this.fadeT < 1) {
+      const p = this.fadeT * this.fadeT * (3 - 2 * this.fadeT) // smoothstep
+      this.ctx.globalAlpha = 1 - p
+      this.ctx.drawImage(this.facePrevCanvas, 0, 0)
+      this.ctx.globalAlpha = p
+      this.ctx.drawImage(this.faceCanvas, 0, 0)
+      this.ctx.globalAlpha = 1
+    } else {
+      this.ctx.drawImage(this.faceCanvas, 0, 0)
+    }
     if (this.texture) this.texture.needsUpdate = true
   }
 }

@@ -193,7 +193,9 @@ export default function LanternModel({
     void ensureFace(src).then(() => {
       // remap the face's strokes to this city's line colour so any face
       // stays readable on any base (dark ink would vanish on 墨黑/墨夜)
-      if (!cancelled) lanternTexture.setFaceImage(src, color.line)
+      // crossfade on swap (colour switch re-inks through the same path);
+      // reduced-motion cuts straight to the new face
+      if (!cancelled) lanternTexture.setFaceImage(src, color.line, !reduceMotion)
     })
     // DEBUG: expose texture layers for inspection (remove before V2)
     if (typeof window !== "undefined") {
@@ -202,7 +204,7 @@ export default function LanternModel({
     return () => {
       cancelled = true
     }
-  }, [face, lanternTexture, color.line])
+  }, [face, lanternTexture, color.line, reduceMotion])
 
   useEffect(() => {
     return () => {
@@ -218,6 +220,8 @@ export default function LanternModel({
     if (paused) return // frozen for share-card capture: no sway, no light drift
     const dt = Math.min(delta, 0.05)
     timeRef.current += dt
+    // 表情 crossfade 时钟 — 只在淡化窗口内有合成开销
+    lanternTexture.tickFaceFade(dt)
 
     // reset the timeline if the user goes back to the studio
     if (prevPhaseRef.current !== phase || (phase === "finished" && lightTimeRef.current < 0)) {
