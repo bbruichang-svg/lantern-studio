@@ -69,14 +69,6 @@ const LIGHTING_MS = 2800
 /** finished stillness ("今晚，灯亮了。") before auto-advancing into /release */
 const FINISHED_HOLD_MS = 3000
 
-/** 首页计数四档文案 — 本机口径，数字永远真实（PRD §7） */
-function counterCopy(n: number): { main: string; sub: string } {
-  if (n === 0) return { main: "灯会初亮，火种已备", sub: "点亮你的第一盏灯" }
-  if (n < 50) return { main: `你是第 ${n} 位点灯人`, sub: "月色正好，再添一盏" }
-  if (n < 1000) return { main: `你已亲手点亮 ${n} 盏灯`, sub: "千灯映月，皆是心意" }
-  return { main: `你已亲手点亮 ${n.toLocaleString()} 盏灯`, sub: "灯火连成星河，皆出你手" }
-}
-
 export default function MvpPage() {
   const router = useRouter()
   const [stage, setStage] = useState<MvpStage>("landing")
@@ -93,6 +85,9 @@ export default function MvpPage() {
   // landing 计数读 localStorage — SSR 渲染 0，挂载后再同步，避免水合不匹配
   // （queueMicrotask：新版 react-hooks 规则禁止 effect 内同步 setState）
   const [count, setCount] = useState(0)
+  // 本机是否已有灯 — 决定首屏要不要给「我的灯」入口（新访客没有灯，
+  // 首屏不该出现一个对他无意义的入口）。挂载后才可读 localStorage，SSR 恒 false。
+  const [hasMine, setHasMine] = useState(false)
   // 手绘表情画廊 — 本机多张（v2），挂载时恢复
   const [customFaces, setCustomFaces] = useState<FacePreset[]>([])
   const [painterOpen, setPainterOpen] = useState(false)
@@ -102,6 +97,7 @@ export default function MvpPage() {
       void fetchWallCount().then((global) => {
         setCount(global ?? litCount())
       })
+      setHasMine(litCount() > 0)
       const faces = readCustomFaces().map(customFacePreset)
       setCustomFaces(faces)
       for (const f of faces) void ensureFace(f.src) // warm the texture cache
@@ -598,31 +594,40 @@ export default function MvpPage() {
       {/* ---------------- LANDING ---------------- */}
       {stage === "landing" && (
         <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-end pb-[11vh]">
-          {/* 计数四档文案 — 本机口径，数字永远真实（PRD §7） */}
-          <p className="text-xs tracking-[0.3em] text-[#E8E4DA]/60">{counterCopy(count).main}</p>
+          {/* 社会认同 — 全网真实计数（灯墙表）。冷启动期不露数字，
+              避免「已有 1 盏灯亮着」反而显得冷清（PRD §7 数字永远真实） */}
+          <p className="text-[11px] tracking-[0.1em] text-[#FAC775]/90">
+            {count >= 20 ? `已有 ${count} 盏灯亮着` : "灯会初亮，火种已备"}
+          </p>
           <h1 className="mt-4 text-3xl font-light tracking-[0.42em] sm:text-4xl">点一盏灯</h1>
-          <p className="mt-3 text-[11px] tracking-[0.4em] text-[#E8E4DA]/55">MAKE IT. LIGHT IT.</p>
+          {/* 价值主张：认领 + 结果承诺。站内不播放音乐（见 songs.ts 顶部注释），
+              故只说「挑一首歌」，不承诺收听，避免进站后的期望落差 */}
+          <p className="mt-4 text-center text-[13px] leading-[1.8] text-[#E8E4DA]/90">
+            认领你的大头仔灯笼
+            <br />
+            点亮后，月亮替你挑一首陈奕迅的歌
+          </p>
           <button
             type="button"
             onClick={handleStart}
-            className="pointer-events-auto mt-9 rounded-full px-10 py-3 text-xs tracking-[0.45em] text-[#E8E4DA]/85 outline outline-1 outline-[#E8E4DA]/30 transition-all duration-300 hover:bg-[#E8E4DA]/10 hover:text-[#E8E4DA]"
+            className="pointer-events-auto mt-7 rounded-full bg-[#EF9F27] px-9 py-3 text-sm tracking-[0.3em] text-[#2C1A00] transition-transform duration-300 hover:scale-[1.03] active:scale-95"
           >
-            ENTER
+            认领我的灯
           </button>
-          <p className="mt-5 text-[10px] tracking-[0.25em] text-[#E8E4DA]/40">
-            {counterCopy(count).sub}
-          </p>
-          <Link
-            href="/my"
-            className="pointer-events-auto mt-4 text-[10px] tracking-[0.3em] text-[#E8E4DA]/40 transition-colors duration-200 hover:text-[#E8E4DA]/80"
-          >
-            我的灯 ›
-          </Link>
+          {/* 仅回访用户可见：新访客还没有灯，这个入口对他无意义 */}
+          {hasMine && (
+            <Link
+              href="/my"
+              className="pointer-events-auto mt-5 text-[11px] tracking-[0.3em] text-[#E8E4DA]/45 transition-colors duration-200 hover:text-[#E8E4DA]/80"
+            >
+              我的灯 ›
+            </Link>
+          )}
           <Link
             href="/wall"
-            className="pointer-events-auto mt-1.5 text-[10px] tracking-[0.3em] text-[#E8E4DA]/40 transition-colors duration-200 hover:text-[#E8E4DA]/80"
+            className="pointer-events-auto mt-4 text-[11px] tracking-[0.3em] text-[#E8E4DA]/50 transition-colors duration-200 hover:text-[#E8E4DA]/85"
           >
-            灯墙 ›
+            看看别人的灯 ›
           </Link>
         </div>
       )}
