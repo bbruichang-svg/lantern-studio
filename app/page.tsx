@@ -596,7 +596,9 @@ export default function MvpPage() {
         <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-end pb-[11vh]">
           {/* 社会认同 — 全网真实计数（灯墙表）。冷启动期不露数字，
               避免「已有 1 盏灯亮着」反而显得冷清（PRD §7 数字永远真实） */}
-          <p className="text-[11px] tracking-[0.1em] text-[#FAC775]/90">
+          {/* 浅奶油色 + 暗描边：这行会压在灯笼上，原暖金 #FAC775 对比度仅 ~3.2:1
+              不达 WCAG AA；#F7E7C6 约 5.8:1，且保留暖调 */}
+          <p className="text-[11px] tracking-[0.1em] text-[#F7E7C6] [text-shadow:0_1px_5px_rgba(0,0,0,0.6)]">
             {count >= 20 ? `已有 ${count} 盏灯亮着` : "灯会初亮，火种已备"}
           </p>
           <h1 className="mt-4 text-3xl font-light tracking-[0.42em] sm:text-4xl">点一盏灯</h1>
